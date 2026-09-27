@@ -46,4 +46,33 @@ public class Player
 
     /// <summary>建立時間（UTC）；首次結算的起算日由此換算。</summary>
     public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>
+    /// 增減指定屬性；結果最低為 0。
+    /// </summary>
+    /// <param name="stat">屬性。</param>
+    /// <param name="delta">增減量，可為負。</param>
+    public void AddStat(StatType stat, int delta)
+    {
+        switch (stat)
+        {
+            case StatType.Strength:
+                Str = Math.Max(0, Str + delta);
+                break;
+            case StatType.Vitality:
+                Vit = Math.Max(0, Vit + delta);
+                break;
+            case StatType.Intelligence:
+                Int = Math.Max(0, Int + delta);
+                break;
+            case StatType.Willpower:
+                Wil = Math.Max(0, Wil + delta);
+                break;
+            case StatType.Spirit:
+                Spi = Math.Max(0, Spi + delta);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(stat), stat, "未知的屬性");
+        }
+    }
 }
