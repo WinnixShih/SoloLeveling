@@ -10,4 +10,9 @@ public class AppOptions
     /// <summary>PostgreSQL 連線字串。</summary>
     [Required]
     public string DatabaseConnectionString { get; set; } = string.Empty;
+
+    /// <summary>JWT 簽章金鑰（HS256），至少 32 bytes。</summary>
+    [Required]
+    [MinLength(32)]
+    public string JwtSecret { get; set; } = string.Empty;
 }
