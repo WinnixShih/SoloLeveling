@@ -36,6 +36,7 @@ builder.Services.AddScoped<QuestService>();
 builder.Services.AddScoped<TodayService>();
 builder.Services.AddScoped<HistoryService>();
 builder.Services.AddScoped<ProgramService>();
+builder.Services.AddHostedService<SettlementScheduler>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

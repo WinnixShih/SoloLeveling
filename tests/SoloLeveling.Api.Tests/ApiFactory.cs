@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
+using SoloLeveling.Api.Services;
 
 namespace SoloLeveling.Api.Tests;
 
@@ -26,6 +27,9 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
         {
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
+            // 排程結算不在測試 host 內背景執行，避免跟測試本身的結算互相干擾；排程邏輯另有專屬測試
+            var scheduler = services.Single(d => d.ImplementationType == typeof(SettlementScheduler));
+            services.Remove(scheduler);
         });
     }
 
