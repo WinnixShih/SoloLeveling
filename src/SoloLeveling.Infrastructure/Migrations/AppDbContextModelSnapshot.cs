@@ -295,6 +295,12 @@ namespace SoloLeveling.Infrastructure.Migrations
                     b.Property<Guid?>("RefId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("Seq")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Seq"));
+
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasMaxLength(16)

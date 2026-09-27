@@ -22,6 +22,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       DatabaseConnectionString: "Host=postgres;Port=5432;Database=sololeveling;Username=postgres;Password=postgres"
+      JwtSecret: "${JwtSecret:-compose-default-secret-change-me-0123456789abcdef}"
     depends_on:
       postgres:
         condition: service_healthy

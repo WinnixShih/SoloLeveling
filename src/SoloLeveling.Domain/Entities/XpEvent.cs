@@ -8,6 +8,9 @@ public class XpEvent
     /// <summary>主鍵。</summary>
     public Guid Id { get; set; }
 
+    /// <summary>DB 產生的遞增序號；同一請求內多筆事件的 <see cref="OccurredAt"/> 相同，靠此欄位決定先後。</summary>
+    public long Seq { get; set; }
+
     /// <summary>所屬使用者。</summary>
     public Guid UserId { get; set; }
 

@@ -98,6 +98,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             b.HasKey(x => x.Id);
             b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId);
             b.Property(x => x.Source).HasConversion<string>().HasMaxLength(16);
+            b.Property(x => x.Seq).UseIdentityAlwaysColumn();
             b.HasIndex(x => new { x.UserId, x.OccurredAt });
         });
     }

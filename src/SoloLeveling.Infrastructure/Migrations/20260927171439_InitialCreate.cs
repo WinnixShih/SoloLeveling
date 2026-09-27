@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -143,6 +144,8 @@ namespace SoloLeveling.Infrastructure.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Seq = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityAlwaysColumn),
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     Amount = table.Column<int>(type: "integer", nullable: false),
                     Source = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),

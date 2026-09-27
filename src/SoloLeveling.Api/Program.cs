@@ -33,6 +33,9 @@ builder.Services.AddScoped<TodayContextLoader>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<PlayerService>();
 builder.Services.AddScoped<QuestService>();
+builder.Services.AddScoped<TodayService>();
+builder.Services.AddScoped<HistoryService>();
+builder.Services.AddScoped<ProgramService>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

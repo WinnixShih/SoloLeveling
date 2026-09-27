@@ -12,7 +12,7 @@ using SoloLeveling.Infrastructure;
 namespace SoloLeveling.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260927164757_InitialCreate")]
+    [Migration("20260927171439_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -297,6 +297,12 @@ namespace SoloLeveling.Infrastructure.Migrations
 
                     b.Property<Guid?>("RefId")
                         .HasColumnType("uuid");
+
+                    b.Property<long>("Seq")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Seq"));
 
                     b.Property<string>("Source")
                         .IsRequired()
