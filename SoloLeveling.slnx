@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SoloLeveling.Api/SoloLeveling.Api.csproj" />
+    <Project Path="src/SoloLeveling.Domain/SoloLeveling.Domain.csproj" />
+    <Project Path="src/SoloLeveling.Infrastructure/SoloLeveling.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SoloLeveling.Api.Tests/SoloLeveling.Api.Tests.csproj" />
+    <Project Path="tests/SoloLeveling.Domain.Tests/SoloLeveling.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
