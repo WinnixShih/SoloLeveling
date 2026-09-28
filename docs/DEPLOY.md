@@ -6,14 +6,20 @@
 
 1. Hetzner Cloud 建立 CX22 等級主機，Ubuntu 24.04，機房選 Singapore，SSH key 選你的公鑰。
 2. 第一次登入：`ssh root@<VPS IP>`。
-3. 建一般使用者並關掉 root 與密碼登入：
+3. 建一般使用者：
 
 ```bash
 adduser --disabled-password --gecos "" deploy
 usermod -aG sudo deploy
 echo 'deploy ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/deploy
 mkdir -p /home/deploy/.ssh && cp /root/.ssh/authorized_keys /home/deploy/.ssh/ && chown -R deploy:deploy /home/deploy/.ssh && chmod 700 /home/deploy/.ssh
-sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/; s/^#\?PermitRootLogin .*/PermitRootLogin no/' /etc/ssh/sshd_config
+```
+
+   **先開第二個終端機用 `ssh deploy@<VPS IP>` 確認登得進去**，再回第一個終端機關掉 root 與密碼登入。Ubuntu 24.04 的 `sshd_config` 會先讀 `sshd_config.d/*.conf`，cloud-init 放在那裡的設定會蓋過主檔，所以要寫進 `.d` 且檔名排最前：
+
+```bash
+printf 'PasswordAuthentication no\nPermitRootLogin no\n' > /etc/ssh/sshd_config.d/00-hardening.conf
+sshd -T | grep -Ei '^(passwordauthentication|permitrootlogin)'   # 兩行都要是 no
 systemctl restart ssh
 ```
 
@@ -81,7 +87,7 @@ Cloudflare → R2 → Create bucket `sololeveling-backups` → Manage R2 API Tok
 
 ```bash
 rclone config create r2 s3 provider=Cloudflare access_key_id=<AccessKeyId> secret_access_key=<Secret> endpoint=https://<AccountId>.r2.cloudflarestorage.com acl=private
-rclone lsd r2:
+rclone ls r2:sololeveling-backups   # token 只限定這個 bucket，用 lsd r2: 列全部 bucket 會被拒
 ```
 
 ### 手動跑一次並排程

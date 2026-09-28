@@ -17,6 +17,11 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   api:
     # ApiImage 只在本機驗證 compose 時用來換成本機 build 的 image，正式環境不設

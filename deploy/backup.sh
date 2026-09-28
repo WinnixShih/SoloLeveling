@@ -16,14 +16,21 @@ KeepDays=30
 
 mkdir -p "$BackupDir"
 File="$BackupDir/sololeveling-$(date -u +%Y%m%d-%H%M%S).dump"
+# 先寫暫存檔，pg_dump 中途失敗不會留下檔名正常的半截檔
+Tmp="$File.tmp"
+trap 'rm -f "$Tmp"' EXIT
 
-docker compose -f "$ComposeFile" exec -T postgres pg_dump -U postgres -Fc sololeveling > "$File"
-test -s "$File"
+docker compose -f "$ComposeFile" exec -T postgres pg_dump -U postgres -Fc sololeveling > "$Tmp"
+test -s "$Tmp"
+# custom 格式經 pipe 輸出時 TOC 在檔尾，能列出目錄才代表檔案完整
+docker compose -f "$ComposeFile" exec -T postgres pg_restore --list < "$Tmp" > /dev/null
+mv "$Tmp" "$File"
 find "$BackupDir" -name 'sololeveling-*.dump' -mtime +"$KeepDays" -delete
 
 if [[ "${1:-}" != "--no-upload" ]]; then
     rclone copy "$File" "$RcloneRemote"
-    rclone delete --min-age "${KeepDays}d" "$RcloneRemote"
+    # 只清自己產生的備份檔，bucket 內其他東西不動
+    rclone delete --min-age "${KeepDays}d" --include 'sololeveling-*.dump' "$RcloneRemote"
 fi
 
 echo "backup ok: $File ($(du -h "$File" | cut -f1))"
