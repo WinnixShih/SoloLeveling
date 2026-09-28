@@ -77,5 +77,5 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 ## 目前狀態
 
 - MVP 規格全部完成，測試全綠（109 個）。
-- 尚未 push，GitHub 遠端尚未建立。
+- GitHub 遠端 `origin` 是 `git@github.com:WinnixShih/SoloLeveling.git`，`main` 已 push 並追蹤 `origin/main`。
 - 待辦見 README「後續」：註冊 Email 唯一索引在極端併發下撞到會回 500（應改 409）、refresh token／登出即失效、前端離線暫存與 PWA 等。
