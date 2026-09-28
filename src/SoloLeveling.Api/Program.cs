@@ -40,9 +40,14 @@ builder.Services.AddHostedService<SettlementScheduler>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+    .AddJwtBearer();
+
+// 驗證金鑰與簽發端（JwtTokenService）同樣取自 AppOptions，共用同一套啟動驗證
+builder.Services
+    .AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IOptions<AppOptions>>((options, appOptions) =>
     {
-        var secret = builder.Configuration["JwtSecret"] ?? string.Empty;
+        var secret = appOptions.Value.JwtSecret;
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
