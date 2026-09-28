@@ -5,7 +5,7 @@ using Testcontainers.PostgreSql;
 namespace SoloLeveling.Api.Tests;
 
 /// <summary>
-/// 以 Testcontainers 起一個 PostgreSQL 16，整個測試類別共用；每個測試自行建立獨立的 DbContext。
+/// 以 Testcontainers 起一個 PostgreSQL 16，透過 <see cref="PostgresCollection"/> 讓所有測試類別共用同一個容器；每個測試自行建立獨立的 DbContext。
 /// </summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
