@@ -7,7 +7,7 @@
 ## 背景與決定
 
 - 專案形態是「一個常駐的 .NET API 加一個 PostgreSQL」，有每小時排程與交易列鎖，不適合無伺服器平台（Vercel、Cloudflare Workers）。
-- 平台：Hetzner 最小等級 VPS，跑 Docker Compose，前面加 Caddy 處理 HTTPS。
+- 平台：Linode（Akamai）東京 Shared CPU 2GB VPS，跑 Docker Compose，前面加 Caddy 處理 HTTPS。
 - 網域：沿用 `winnixgrowth.com`，註冊商從 Bluehost（實際登記在 Network Solutions）轉到 Cloudflare Registrar；Bluehost 的 WordPress 主機退掉。
 - 更新流程：GitHub Actions 建 image 推到 GitHub Container Registry，VPS 只做 `pull` 加 `up`。
 - 備份：每日 `pg_dump` 上傳 Cloudflare R2，保留 30 天。
@@ -16,15 +16,15 @@
 ## 假設
 
 - 作業系統 Ubuntu 24.04 LTS。
-- VPS 選新加坡機房，離台灣最近；比德國機房貴約 1 歐元。
+- VPS 選東京機房，從台灣 HiNet 延遲約 50 到 60 毫秒。
 - GitHub repo 是公開的，VPS 拉 image 不需要 token；若改為私有，VPS 要另設唯讀的 `read:packages` token。
-- 只有一個使用者，CX22 等級（2 vCPU、4GB RAM、40GB 硬碟）足夠，資料庫與 API 跑同一台。
+- 只有一個使用者，Linode 2 GB（1 vCPU、2GB RAM、50GB SSD）足夠，資料庫與 API 跑同一台。
 
 ## 設計
 
 ### 1. 主機與網路
 
-- Hetzner CX22 等級，Ubuntu 24.04。
+- Linode（Akamai）東京機房，Shared CPU「Linode 2 GB」方案，Ubuntu 24.04。
 - 初始化：只允許 SSH 金鑰登入、關閉密碼登入；`ufw` 只開 22、80、443；開啟 `unattended-upgrades` 自動安全更新；安裝 Docker Engine 與 compose plugin。
 - Docker daemon 設 log 上限（`json-file`，`max-size`、`max-file`），避免 log 吃滿磁碟。
 
@@ -86,12 +86,12 @@
 
 | 項目 | 費用 | 說明 |
 | --- | --- | --- |
-| Hetzner CX22 | 每月約 4 到 6 歐元 | 新加坡機房較德國貴；公網 IPv4 約另加 0.6 歐元 |
+| Linode 2 GB（東京） | 每月 US$12 | IPv4 內含；台灣個人帳號可能加 5% 營業稅；新戶有 US$100 抵用金 |
 | 網域 `.com` | 每年約 10 到 11 美元 | Cloudflare Registrar 成本價，轉移時付一年並延長效期 |
 | Cloudflare DNS、Let's Encrypt、R2（10GB 內）、GitHub Actions 與 GHCR（公開 repo） | 免費 | 用量遠低於免費額度 |
 
-合計每月約 5 到 7 歐元，每年含網域約台幣 2500 到 3000 元。之後可能增加：Hetzner 快照備份（月費 20%）、iOS 上架的 Apple Developer Program（每年 99 美元）。
+合計每月約 US$12 到 13，每年含網域約台幣 4500 到 5000 元。之後可能增加：Linode 自動備份（月費約 20%，2GB 方案約 US$2）、iOS 上架的 Apple Developer Program（每年 99 美元）。
 
 ## 這次不做
 
-refresh token、PWA 與手機版面、監控告警、push 後自動 SSH 部署、Cloudflare 橘雲代理與防火牆規則、Hetzner 快照。
+refresh token、PWA 與手機版面、監控告警、push 後自動 SSH 部署、Cloudflare 橘雲代理與防火牆規則、Linode 自動備份。

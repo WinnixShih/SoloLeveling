@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把 SoloLeveling 部署到 Hetzner VPS，以 `https://solo.winnixgrowth.com` 對外提供服務，並建立更新、退版、備份的固定流程。
+**Goal:** 把 SoloLeveling 部署到 Linode（Akamai）東京 VPS，以 `https://solo.winnixgrowth.com` 對外提供服務，並建立更新、退版、備份的固定流程。
 
 **Architecture:** VPS 上跑 Docker Compose 三個容器：Caddy（HTTPS 反向代理）、API（從 GitHub Container Registry 拉 image）、PostgreSQL。GitHub Actions 在 push 到 `main` 時跑測試並建 image；VPS 只做 `pull` 加 `up`。每日 `pg_dump` 上傳 Cloudflare R2。
 
-**Tech Stack:** .NET 10、Docker Compose、Caddy 2、PostgreSQL 16、GitHub Actions、GHCR、rclone、Cloudflare R2、Ubuntu 24.04
+**Tech Stack:** .NET 10、Docker Compose、Caddy 2、PostgreSQL 16、GitHub Actions、GHCR、rclone、Cloudflare R2、Linode（Akamai）、Ubuntu 24.04
 
 **Spec:** `docs/superpowers/specs/2026-09-28-vps-deployment-design.md`
 
@@ -588,13 +588,13 @@ git commit -m "chore: 新增每日 pg_dump 備份腳本" -m "1. 機器壞掉資�
 - [ ] **Step 1: 寫 `docs/DEPLOY.md`**
 
 ```markdown
-# 部署手冊（Hetzner VPS）
+# 部署手冊（Linode 東京）
 
 對外網址 `https://solo.winnixgrowth.com`。VPS 上跑 Docker Compose 三個容器：Caddy（HTTPS）、API、PostgreSQL。設計背景見 `docs/superpowers/specs/2026-09-28-vps-deployment-design.md`。
 
 ## 1. 準備 VPS
 
-1. Hetzner Cloud 建立 CX22 等級主機，Ubuntu 24.04，機房選 Singapore，SSH key 選你的公鑰。
+1. 到 https://cloud.linode.com 建立 Linode：Region 選 Tokyo（Tokyo 3 優先，缺貨選 Tokyo 2），Image 選 Ubuntu 24.04 LTS，Plan 選 Shared CPU → Linode 2 GB（US$12／月），Label 填 `sololeveling`，Root Password 設一個強密碼（Linode 必填，之後會關掉密碼登入），SSH Keys 勾選你自己電腦的公鑰，其餘預設，Create Linode。建好後在 Network 分頁看 IPv4。
 2. 第一次登入：`ssh root@<VPS IP>`。
 3. 建一般使用者並關掉 root 密碼登入：
 
