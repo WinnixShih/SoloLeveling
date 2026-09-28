@@ -6,7 +6,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      # 只綁本機，避免預設帳密的 DB 對外暴露
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +23,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       DatabaseConnectionString: "Host=postgres;Port=5432;Database=sololeveling;Username=postgres;Password=postgres"
-      JwtSecret: "${JwtSecret:-compose-default-secret-change-me-0123456789abcdef}"
+      # 必填：由同目錄的 .env 或主機環境變數提供，範本見 .env.example
+      JwtSecret: "${JwtSecret:?請在 .env 設定 JwtSecret（至少 32 字元），範本見 .env.example}"
     depends_on:
       postgres:
         condition: service_healthy
