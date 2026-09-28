@@ -12,8 +12,9 @@ namespace SoloLeveling.Api.Tests;
 
 /// <summary>
 /// 對著 Testcontainers 的 PostgreSQL 起整個 API；時間來源換成 <see cref="FakeTimeProvider"/> 讓測試可撥時間。
+/// <paramref name="environment"/> 預設 Development，要驗證正式環境行為（例如 Swagger 關閉）時傳 "Production"。
 /// </summary>
-public sealed class ApiFactory(string connectionString) : WebApplicationFactory<Program>
+public sealed class ApiFactory(string connectionString, string environment = "Development") : WebApplicationFactory<Program>
 {
     public const string JwtSecret = "test-secret-key-must-be-at-least-32-bytes-long!!";
 
@@ -21,6 +22,7 @@ public sealed class ApiFactory(string connectionString) : WebApplicationFactory<
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseEnvironment(environment);
         builder.UseSetting("DatabaseConnectionString", connectionString);
         builder.UseSetting("JwtSecret", JwtSecret);
         builder.ConfigureServices(services =>

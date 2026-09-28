@@ -90,6 +90,7 @@ builder.Services
     });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
 
 var app = builder.Build();
 
@@ -101,13 +102,22 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
-app.UseSwagger();
-app.UseSwaggerUI();
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 app.UseDefaultFiles();
-app.UseStaticFiles();
+// 前端只有三個小檔案，一律要求瀏覽器重新驗證（ETag 未變回 304），部署新版後不會拿到舊檔
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "no-cache",
+});
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+// 給 compose healthcheck 與部署後驗證用，會實際查一次資料庫
+app.MapHealthChecks("/health");
 
 app.Run();
 
