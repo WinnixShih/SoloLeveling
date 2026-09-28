@@ -11,6 +11,10 @@ trim_trailing_whitespace = true
 [*.{json,yml,yaml,md,html,js,css}]
 indent_size = 2
 
+# Caddyfile 官方格式化工具（caddy fmt）用 tab
+[Caddyfile]
+indent_style = tab
+
 [*.cs]
 # 控制流一律加大括號
 csharp_prefer_braces = true:error

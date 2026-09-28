@@ -1,0 +1,69 @@
+# 正式環境：Caddy 對外提供 HTTPS，API 與 PostgreSQL 都不對外開 port
+# 使用方式：cp .env.example .env 填值後 docker compose -f docker-compose.prod.yml up -d
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      Domain: "${Domain:?請在 .env 設定 Domain，例如 solo.winnixgrowth.com}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+  api:
+    # ApiImage 只在本機驗證 compose 時用來換成本機 build 的 image，正式環境不設
+    image: "${ApiImage:-ghcr.io/winnixshih/sololeveling-api}:${ImageTag:-latest}"
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # 在 Caddy 後面，讓框架從 X-Forwarded-* 還原原始 scheme 與來源 IP
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      DatabaseConnectionString: "Host=postgres;Port=5432;Database=sololeveling;Username=postgres;Password=${PostgresPassword:?請在 .env 設定 PostgresPassword}"
+      JwtSecret: "${JwtSecret:?請在 .env 設定 JwtSecret（至少 32 字元），可用 openssl rand -base64 48 產生}"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sololeveling
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "${PostgresPassword:?請在 .env 設定 PostgresPassword}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sololeveling"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
