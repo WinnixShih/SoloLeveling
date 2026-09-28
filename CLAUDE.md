@@ -5,6 +5,7 @@
 - 產品規格（領域規則、API、結算演算法、驗收清單）：[docs/SPEC.md](docs/SPEC.md)
 - 啟動方式、環境變數、curl 範例、實作上的決定、後續待辦：[README.md](README.md)
 - 分層、請求生命週期、資料模型、新增端點樣板：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 部署到 VPS、更新、退版、備份：[docs/DEPLOY.md](docs/DEPLOY.md)
 
 ## 常用指令
 
@@ -12,8 +13,8 @@
 dotnet build
 dotnet test                          # Api.Tests 用 Testcontainers 起 PostgreSQL，需要 Docker 在跑
 dotnet format --verify-no-changes
-docker compose up -d --build         # 第一次要先 cp .env.example .env 並填 JwtSecret；前端 http://localhost:8080/，Swagger http://localhost:8080/swagger
-dotnet run --project src/SoloLeveling.Api   # 本機開發，需先有 PostgreSQL（docker compose up -d postgres）
+docker compose up -d --build         # 第一次要先 cp .env.example .env 並填 JwtSecret；前端 http://localhost:8080/，健康檢查 /health；Production 環境不開 Swagger
+dotnet run --project src/SoloLeveling.Api   # 本機開發，需先有 PostgreSQL（docker compose up -d postgres）；Swagger 只在此 Development 環境開 http://localhost:5032/swagger
 
 # 新增 migration（設計階段會讀 appsettings.Development.json 的 JwtSecret，檔內已有）
 dotnet ef migrations add <Name> -p src/SoloLeveling.Infrastructure -s src/SoloLeveling.Api -o Migrations

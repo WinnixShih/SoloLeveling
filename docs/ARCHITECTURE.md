@@ -170,6 +170,7 @@ flowchart LR
 ## 7. 前端
 
 - 位置：`src/SoloLeveling.Api/wwwroot`（`index.html`、`app.js`、`app.css`），由 `UseDefaultFiles`＋`UseStaticFiles` 提供。純 HTML＋JS，無建置步驟。
+- **快取**：`UseStaticFiles` 的 `OnPrepareResponse` 對所有靜態檔設 `Cache-Control: no-cache`，瀏覽器每次以 ETag 重新驗證（未變回 304），部署新版後不會拿到舊檔，因此不需要版本參數。
 - **路由**：hash 路由 `#login`、`#register`、`#today`、`#progress`、`#settings`，監聽 `hashchange`；無 token 時一律顯示登入／註冊。
 - **token**：存在 `localStorage` 的 `token`；API 回 401 時清除並導回 `#login`。
 - **資料流**：每次切換畫面先並行取 `GET /me` 與 `GET /today`；勾選或輸入進度時呼叫 `PUT /today/quests/{id}/progress`，以回應覆蓋今日資料，再重取 `/me` 更新等級與屬性。前端不計算 EXP、等級、達標率。
@@ -185,6 +186,9 @@ flowchart LR
   - `postgres`：`postgres:16-alpine`，資料庫 `sololeveling`，port 只綁 `127.0.0.1:5432`（預設帳密，不對外暴露），資料放 `pgdata` volume，healthcheck 用 `pg_isready`。
   - `api`：由根目錄 Dockerfile 建置，對外 8080，`depends_on` 等 postgres `service_healthy` 才啟動；環境變數 `ASPNETCORE_ENVIRONMENT=Production`、`DatabaseConnectionString`、`JwtSecret`（`${JwtSecret:?…}` 必填、無預設值，由根目錄 `.env` 或主機環境變數提供，範本見 `.env.example`；沒設時 compose 直接失敗）。
 - **自動 migrate**：`Program.cs` 在 `app.Run()` 之前建立 scope 呼叫 `db.Database.Migrate()`。
+- **健康檢查**：`GET /health` 由 `MapHealthChecks` 提供，`AddDbContextCheck<AppDbContext>` 會實際查一次資料庫；不需驗證，給 compose healthcheck 與部署後驗證用。
+- **Swagger**：只在 `app.Environment.IsDevelopment()` 時註冊，compose 與正式環境都是 Production，不對外提供。
+- **正式環境**：`deploy/docker-compose.prod.yml`（Caddy＋API＋PostgreSQL）、`deploy/Caddyfile`、`deploy/backup.sh`，操作步驟見 [DEPLOY.md](DEPLOY.md)。
 - **設定驗證**：`AppOptions` 以 `ValidateDataAnnotations().ValidateOnStart()` 綁定，缺必填值啟動即失敗。
 
 ## 9. 新增一支需要「今日」的端點

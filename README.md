@@ -25,8 +25,13 @@ docker compose up --build
 
 - `JwtSecret` 沒有預設值，`.env` 或主機環境變數沒設時 compose 直接失敗。
 - 前端：<http://localhost:8080/>
-- Swagger：<http://localhost:8080/swagger>
 - API 啟動時會自動套用 migration。
+- compose 以 Production 環境執行，Swagger 不會開；要看 Swagger 用下面的本機開發方式。
+- 健康檢查：<http://localhost:8080/health>（會實際查一次資料庫）。
+
+### 正式環境
+
+部署到 VPS 的步驟、更新、退版、備份見 [docs/DEPLOY.md](docs/DEPLOY.md)。
 
 ### 本機開發
 
@@ -35,6 +40,8 @@ docker compose up --build
 ```bash
 dotnet run --project src/SoloLeveling.Api
 ```
+
+Swagger 只在 Development 環境開：<http://localhost:5032/swagger>。
 
 開發環境設定在 `src/SoloLeveling.Api/appsettings.Development.json`（不會打包進 Docker image）。
 
