@@ -12,7 +12,7 @@
 dotnet build
 dotnet test                          # Api.Tests 用 Testcontainers 起 PostgreSQL，需要 Docker 在跑
 dotnet format --verify-no-changes
-docker compose up -d --build         # 前端 http://localhost:8080/，Swagger http://localhost:8080/swagger
+docker compose up -d --build         # 第一次要先 cp .env.example .env 並填 JwtSecret；前端 http://localhost:8080/，Swagger http://localhost:8080/swagger
 dotnet run --project src/SoloLeveling.Api   # 本機開發，需先有 PostgreSQL（docker compose up -d postgres）
 
 # 新增 migration（設計階段會讀 appsettings.Development.json 的 JwtSecret，檔內已有）

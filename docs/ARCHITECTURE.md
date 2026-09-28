@@ -70,7 +70,7 @@ flowchart LR
 | 路徑 | 內容 |
 | --- | --- |
 | `Program.cs` | DI 註冊、Options 驗證、JWT、JSON converter、統一錯誤格式、啟動時 migrate、中介軟體順序 |
-| `AppOptions.cs` | `DatabaseConnectionString`、`JwtSecret`（`[Required]`，JwtSecret `[MinLength(32)]`） |
+| `AppOptions.cs` | `DatabaseConnectionString`、`JwtSecret`（`[Required]`，JwtSecret `[MinLength(32)]`）；JWT 簽發與驗證都從這裡取金鑰 |
 | `Controllers/AuthController.cs` | `POST /auth/register`、`POST /auth/login`（不需驗證） |
 | `Controllers/MeController.cs` | `GET /me`、`PATCH /me` |
 | `Controllers/QuestsController.cs` | `GET/POST /quests`、`PUT /quests/reorder`、`PUT/DELETE /quests/{id}` |
@@ -163,7 +163,7 @@ flowchart LR
 
 - **密碼**：`PasswordHasher` 使用 PBKDF2-SHA256、100,000 次、16 bytes salt、32 bytes hash，儲存格式 `pbkdf2-sha256$迭代次數$salt(Base64)$hash(Base64)`；驗證時讀字串內的迭代次數，日後調高不影響舊資料；比對用 `CryptographicOperations.FixedTimeEquals`。
 - **簽發**：`JwtTokenService.CreateToken` 以 `JwtSecret` 做 HS256，有效 7 天，只放 `sub`（使用者 ID），不放 `nbf`。註冊與登入都回 `{ token, user }`。
-- **驗證**：`Program.cs` 設 `MapInboundClaims = false`（claim 名稱保留 `sub`）、不驗 issuer／audience、`ClockSkew` 1 分鐘。
+- **驗證**：`Program.cs` 以 `AddOptions<JwtBearerOptions>(…).Configure<IOptions<AppOptions>>` 從 `AppOptions.JwtSecret` 取驗證金鑰（與簽發端共用同一個 Options 與 `ValidateOnStart`，不直接讀 `Configuration`），設 `MapInboundClaims = false`（claim 名稱保留 `sub`）、不驗 issuer／audience、`ClockSkew` 1 分鐘。
 - **取使用者**：Controller 以 `[Authorize]` 保護，`CurrentUserExtensions.GetUserId()` 讀 `sub` 轉 Guid。
 - **401 格式**：`JwtBearerEvents.OnChallenge` 改寫回應為 `{ error: { code: "Unauthorized", message } }`；登入帳密錯誤是 `AccountService` 丟 `ApiErrorException.Unauthorized("InvalidCredentials", …)`。
 
@@ -180,10 +180,10 @@ flowchart LR
 - **Dockerfile（兩階段）**：
   - `sdk:10.0` 階段先只複製 `Directory.Build.props`、`SoloLeveling.slnx` 與三個 src 的 csproj 做 `restore`（利用層快取），再複製 `src/` 做 `publish -c Release`。
   - `aspnet:10.0` 執行階段額外安裝 `libgssapi-krb5-2`（Npgsql 啟動時會探測，缺少會在 log 印錯誤），`EXPOSE 8080`。
-- **.dockerignore**：排除 `bin/`、`obj/`、`.vs/`、`.git/`、`tests/`、`docs/`、`*.md`。
+- **.dockerignore**：排除 `bin/`、`obj/`、`.vs/`、`.git/`、`tests/`、`docs/`、`*.md`、`**/appsettings.Development.json`（image 內不含開發設定；該檔仍留在 git 給 `dotnet run` 與 `dotnet ef` 使用）。
 - **docker-compose.yml**：
-  - `postgres`：`postgres:16-alpine`，資料庫 `sololeveling`，對外 5432，資料放 `pgdata` volume，healthcheck 用 `pg_isready`。
-  - `api`：由根目錄 Dockerfile 建置，對外 8080，`depends_on` 等 postgres `service_healthy` 才啟動；環境變數 `ASPNETCORE_ENVIRONMENT=Production`、`DatabaseConnectionString`、`JwtSecret`（可由外部 `JwtSecret` 覆寫，否則用 compose 內的預設值，正式環境務必換掉）。
+  - `postgres`：`postgres:16-alpine`，資料庫 `sololeveling`，port 只綁 `127.0.0.1:5432`（預設帳密，不對外暴露），資料放 `pgdata` volume，healthcheck 用 `pg_isready`。
+  - `api`：由根目錄 Dockerfile 建置，對外 8080，`depends_on` 等 postgres `service_healthy` 才啟動；環境變數 `ASPNETCORE_ENVIRONMENT=Production`、`DatabaseConnectionString`、`JwtSecret`（`${JwtSecret:?…}` 必填、無預設值，由根目錄 `.env` 或主機環境變數提供，範本見 `.env.example`；沒設時 compose 直接失敗）。
 - **自動 migrate**：`Program.cs` 在 `app.Run()` 之前建立 scope 呼叫 `db.Database.Migrate()`。
 - **設定驗證**：`AppOptions` 以 `ValidateDataAnnotations().ValidateOnStart()` 綁定，缺必填值啟動即失敗。
 

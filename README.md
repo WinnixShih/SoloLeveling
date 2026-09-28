@@ -19,22 +19,24 @@ tests/SoloLeveling.Api.Tests     Testcontainers 整合測試（結算、排程�
 ### Docker Compose（一鍵）
 
 ```bash
+cp .env.example .env   # 第一次：填入 JwtSecret（可用 openssl rand -base64 48 產生）
 docker compose up --build
 ```
 
+- `JwtSecret` 沒有預設值，`.env` 或主機環境變數沒設時 compose 直接失敗。
 - 前端：<http://localhost:8080/>
 - Swagger：<http://localhost:8080/swagger>
 - API 啟動時會自動套用 migration。
 
 ### 本機開發
 
-需要一個 PostgreSQL（可用 `docker compose up postgres`），然後：
+需要一個 PostgreSQL（可用 `docker compose up postgres`，只綁 `127.0.0.1:5432`），然後：
 
 ```bash
 dotnet run --project src/SoloLeveling.Api
 ```
 
-開發環境設定在 `src/SoloLeveling.Api/appsettings.Development.json`。
+開發環境設定在 `src/SoloLeveling.Api/appsettings.Development.json`（不會打包進 Docker image）。
 
 ### 測試
 
@@ -48,7 +50,7 @@ dotnet format --verify-no-changes
 | 名稱 | 說明 |
 | --- | --- |
 | `DatabaseConnectionString` | PostgreSQL 連線字串（必填） |
-| `JwtSecret` | JWT 簽章金鑰，至少 32 bytes（必填；正式環境務必換掉 compose 的預設值） |
+| `JwtSecret` | JWT 簽章金鑰，至少 32 字元（必填；compose 由根目錄 `.env` 或主機環境變數提供，範本見 `.env.example`） |
 | `ASPNETCORE_ENVIRONMENT` | `Development` 會載入 `appsettings.Development.json` |
 
 缺必填值時啟動即失敗（`ValidateOnStart`）。
