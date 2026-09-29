@@ -9,7 +9,7 @@ namespace SoloLeveling.Domain.Rules;
 public static class ProgressUpdater
 {
     /// <summary>
-    /// 對某任務寫入新的進度值（規格 4.4）。
+    /// 對某任務寫入新的進度值（規格 4.4）。漸進任務以當階目標判定（見 <see cref="Progression.EffectiveTarget"/>），並把判定用的目標寫入 <see cref="QuestProgress.TargetSnapshot"/>。
     /// </summary>
     /// <param name="player">玩家。</param>
     /// <param name="log">今日紀錄（含 <see cref="DailyLog.Progresses"/>）。</param>
@@ -17,6 +17,7 @@ public static class ProgressUpdater
     /// <param name="quest">要寫入的任務。</param>
     /// <param name="value">新的進度值；null 表示未填。</param>
     /// <param name="now">當下時間（UTC）。</param>
+    /// <param name="doneDaysBeforeToday">此任務在今天之前的達標天數；一般任務傳 0 即可。</param>
     /// <returns>這次產生的 EXP 事件。</returns>
     /// <exception cref="DomainValidationException">Check 類型的值不是 0／1，或 Count／Limit 的值為負。</exception>
     public static IReadOnlyList<XpEvent> SetValue(
@@ -25,7 +26,8 @@ public static class ProgressUpdater
         IReadOnlyList<Quest> activeQuests,
         Quest quest,
         decimal? value,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        int doneDaysBeforeToday)
     {
         ValidateValue(quest, value);
 
@@ -37,10 +39,12 @@ public static class ProgressUpdater
             log.Progresses.Add(progress);
         }
 
+        var target = Progression.EffectiveTarget(quest, doneDaysBeforeToday);
         var wasDone = progress.IsDone;
-        var isDone = CompletionRules.IsDone(quest.QuestType, value, quest.TargetValue);
+        var isDone = CompletionRules.IsDone(quest.QuestType, value, target);
         progress.Value = value;
         progress.IsDone = isDone;
+        progress.TargetSnapshot = target;
 
         if (!wasDone && isDone)
         {

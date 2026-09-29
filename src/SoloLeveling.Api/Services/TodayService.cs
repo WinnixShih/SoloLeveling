@@ -47,7 +47,7 @@ public class TodayService(AppDbContext db, TodayContextLoader loader, TimeProvid
             ?? throw ApiErrorException.NotFound("QuestNotFound", "任務不存在");
 
         var existingProgressIds = context.TodayLog.Progresses.Select(p => p.Id).ToHashSet();
-        var events = ProgressUpdater.SetValue(context.Player, context.TodayLog, context.ActiveQuests, quest, value, clock.GetUtcNow());
+        var events = ProgressUpdater.SetValue(context.Player, context.TodayLog, context.ActiveQuests, quest, value, clock.GetUtcNow(), 0);
         // 透過導覽集合新增、且主鍵已設值的實體會被 EF 當成既有資料（Modified），必須明確標成 Added
         db.QuestProgresses.AddRange(context.TodayLog.Progresses.Where(p => !existingProgressIds.Contains(p.Id)));
         db.XpEvents.AddRange(events);

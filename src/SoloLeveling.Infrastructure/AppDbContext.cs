@@ -21,6 +21,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     /// <summary>任務。</summary>
     public DbSet<Quest> Quests => Set<Quest>();
 
+    /// <summary>引導式目標。</summary>
+    public DbSet<Goal> Goals => Set<Goal>();
+
     /// <summary>每日紀錄。</summary>
     public DbSet<DailyLog> DailyLogs => Set<DailyLog>();
 
@@ -73,6 +76,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             b.Property(x => x.QuestType).HasConversion<string>().HasMaxLength(16);
             b.Property(x => x.TargetValue).HasPrecision(10, 2);
             b.Property(x => x.Step).HasPrecision(10, 2);
+            b.Property(x => x.ValueKind).HasConversion<string>().HasMaxLength(16);
+            b.Property(x => x.StartValue).HasPrecision(10, 2);
+            b.Property(x => x.EndValue).HasPrecision(10, 2);
+            b.Property(x => x.StepValue).HasPrecision(10, 2);
+            b.HasOne<Goal>().WithMany().HasForeignKey(x => x.GoalId);
             b.HasIndex(x => new { x.UserId, x.IsArchived });
         });
 
@@ -85,11 +93,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             b.HasMany(x => x.Progresses).WithOne().HasForeignKey(x => x.DailyLogId);
         });
 
+        modelBuilder.Entity<Goal>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId);
+            b.Property(x => x.Category).HasConversion<string>().HasMaxLength(16);
+            b.Property(x => x.Answers).HasColumnType("jsonb").IsRequired();
+            b.HasIndex(x => new { x.UserId, x.IsArchived });
+            // 同類別同時只能有一個進行中的目標
+            b.HasIndex(x => new { x.UserId, x.Category }).IsUnique().HasFilter("\"IsArchived\" = false");
+        });
+
         modelBuilder.Entity<QuestProgress>(b =>
         {
             b.HasKey(x => x.Id);
             b.HasOne<Quest>().WithMany().HasForeignKey(x => x.QuestId);
             b.Property(x => x.Value).HasPrecision(10, 2);
+            b.Property(x => x.TargetSnapshot).HasPrecision(10, 2);
             b.HasIndex(x => new { x.DailyLogId, x.QuestId }).IsUnique();
         });
 
