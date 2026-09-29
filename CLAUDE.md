@@ -25,7 +25,7 @@ dotnet ef migrations add <Name> -p src/SoloLeveling.Infrastructure -s src/SoloLe
 依賴方向：Api → Infrastructure → Domain（Domain 無框架依賴）。
 
 ```
-src/SoloLeveling.Domain           實體（Entities/）、純規則（Rules/）、enum、DefaultQuests、DomainValidationException
+src/SoloLeveling.Domain           實體（Entities/）、純規則（Rules/）、enum、Goals/（類別定義與規劃器）、DefaultQuests、DomainValidationException
 src/SoloLeveling.Infrastructure   AppDbContext、Migrations、SettlementService（交易＋列鎖）、PasswordHasher
 src/SoloLeveling.Api              Controllers、Services（應用服務）、Contracts（DTO／Mapper）、Errors、Auth、SettlementScheduler、wwwroot 前端
 tests/SoloLeveling.Domain.Tests   Domain 規則純單元測試
@@ -44,6 +44,8 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 - **前端不計算 EXP／等級**，一律以 API 回傳值覆蓋畫面。
 - **錯誤格式 `{ error: { code, message } }`：** Api 層丟 `ApiErrorException`（有 `BadRequest／Unauthorized／NotFound／Conflict` 工廠方法），Domain 層丟 `DomainValidationException`（對應 400），由 `ErrorHandlingMiddleware` 轉換。模型繫結失敗與 JWT 401 也在 `Program.cs` 轉成同一格式。其他例外交給框架回 500。
 - **enum 序列化：** `StatType` 在 JSON 是代碼 `STR/VIT/INT/WIL/SPI`（`StatTypeJsonConverter`，在 `Program.cs` 必須註冊在 `JsonStringEnumConverter` 之前）；其他 enum 是字串名稱；DB 內 enum 一律存字串（`HasConversion<string>()`）。
+- **任務的判定與顯示一律用 `Progression.EffectiveTarget`／`RenderName`，不直接讀 `Quest.TargetValue`／`Name`。** 漸進任務的階段不存 DB，由 `TodayContext.DoneDaysBeforeToday` 算出，該字典由 `TodayContextLoader` 一次批次載入（`SetValue` 時傳入 `doneDaysBeforeToday` 以計算目標）。
+- **Goal 封存連帶封存其任務；漸進任務的目標欄位不可編輯**，要改就封存目標重建。
 
 ## 已知陷阱
 
@@ -62,7 +64,7 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 - `Api.Tests`：
   - `PostgresFixture` 以 Testcontainers 起 `postgres:16-alpine` 並跑 migration；測試類別加 `[Collection(PostgresCollection.Name)]`，全部共用同一個容器。
   - `ApiFactory`（`WebApplicationFactory<Program>`）把 `TimeProvider` 換成 `FakeTimeProvider`（`_factory.Clock.Advance(...)` 撥時間，起始 2026-09-28 10:00 UTC），並移除 `SettlementScheduler` 的背景執行（排程另有 `SettlementSchedulerTests` 直接呼叫 `RunOnceAsync`）。
-  - `_factory.RegisterAsync(timeZoneId = "UTC")` 以隨機 Email 註冊並回傳帶 Bearer 的 `HttpClient`；因為每個測試用不同使用者，共用 DB 不互相干擾。
+  - `_factory.RegisterAsync(timeZoneId = "UTC", seedBasicQuests = true)` 以隨機 Email 註冊並回傳帶 Bearer 的 `HttpClient`；`seedBasicQuests` 為 true 時同時呼叫 `POST /goals` 建立 9 個基本任務。因為每個測試用不同使用者，共用 DB 不互相干擾。
   - 不經 HTTP 的測試（`SettlementServiceTests`）直接用 `fixture.CreateDbContext()` 種資料，並以 `new SettlementService(db, new FakeTimeProvider(now))` 呼叫。
 - 測試名稱用中文描述行為（例：`GetToday_新玩家_9個任務皆未完成`），斷言用 FluentAssertions。
 - 新功能照 TDD：先寫失敗的測試，再實作。
@@ -77,6 +79,6 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 
 ## 目前狀態
 
-- MVP 規格全部完成，測試全綠（109 個）。
+- 引導式目標與漸進任務功能完成，測試全綠（191 個：Domain 127 + Api 64）。
 - GitHub 遠端 `origin` 是 `git@github.com:WinnixShih/SoloLeveling.git`，`main` 已 push 並追蹤 `origin/main`。
 - 待辦見 README「後續」：註冊 Email 唯一索引在極端併發下撞到會回 500（應改 409）、refresh token／登出即失效、前端離線暫存與 PWA 等。

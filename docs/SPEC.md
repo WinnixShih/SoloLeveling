@@ -11,8 +11,9 @@
 - 第 6 節所有端點。
 - 一個簡單的 Web 前端（純 HTML + JS，由 API 的 `wwwroot` 靜態提供）能完成每日操作流程：登入、看今日任務、勾選、累計、填上限值、看等級與屬性、看 66 天日曆。
 - Docker Compose 一鍵啟動（api + postgres）。
+- 註冊後由引導流程依固定類別產生漸進式任務。
 
-不做：推播、好友、排名、卡片、專注計時器、AI 功能、iOS/Android 原生 App、付費。
+不做：推播、好友、排名、卡片、專注計時器、iOS/Android 原生 App、付費、AI 產生計畫。
 
 ## 2. 技術堆疊（固定）
 
@@ -134,9 +135,9 @@ Limit,實際量 (null 表示未填),value != null && value <= TargetValue
 - 達標率只計算 `IsArchived == false` 的任務。
 - 封存任務後重算「今日」達標率（分母變小），依 4.5 補發或收回獎勵；歷史 DailyLog 的 CompletionRatio 不動。
 
-### 4.10 新使用者預設任務
+### 4.10 基本任務（原預設任務）
 
-註冊成功後自動建立以下 9 個任務：
+以下 9 個任務可在引導流程最後一步勾選加入，被目標所取代的任務無法勾選：
 
 ```csv
 Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
@@ -151,6 +152,49 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 寫下今天的三件好事,SPI,Easy,Check,,,
 ```
 
+### 4.11 引導式目標與漸進任務
+
+新帳號註冊後進入引導流程，依使用者的選擇與現況產生多個目標，每個目標包含若干漸進式任務，目標值會隨著達標天數逐步逼近終點。
+
+**目標類別與取代關係**
+
+| 類別 | 名稱 | 問題 | 產生任務 | 屬性／難度 | 取代基本任務索引 |
+| --- | --- | --- | --- | --- | --- |
+| `Routine` | 作息 | 現在就寢時間、目標就寢時間、現在起床時間、目標起床時間、天數 | `{target} 前上床睡覺`（Check）、`{target} 前起床`（Check） | VIT／Normal、VIT／Hard | 0、1 |
+| `Exercise` | 運動 | 現在分鐘、目標分鐘、天數 | `運動`（Count，單位分鐘，Step 5） | STR／Normal | 7 |
+| `Reading` | 閱讀 | 現在分鐘、目標分鐘、天數 | `閱讀`（Count，單位分鐘，Step 5） | INT／Normal | 3 |
+| `ScreenTime` | 螢幕時間 | 現在小時、目標小時、天數 | `手機螢幕時間`（Limit，單位小時，Step 0.25） | WIL／Hard | 5 |
+
+天數 `lengthDays` 介於 7 到 90；時間格式 `HH:MM`（00:00 到 23:59）；目標必須比現況「更好」（就寢與起床目標不晚於現況；運動、閱讀、螢幕時間目標分別更多、更多、更少），允許相等。
+
+**時間編碼**
+
+時間點存為「距中午 12:00 的分鐘數」，0 到 1439。例：01:00 是 780、07:00 是 1140、23:30 是 690。顯示時轉換回 `HH:MM`：`((minutes / 60) + 12) % 24`。
+
+**階段公式**
+
+每個漸進任務有：`StartValue`（現況）、`EndValue`（終點）、`StepValue`（每階變化）、`StageCount`（總階）、`DaysPerStep`（每階天數，第一版固定 3）。
+
+建立時：
+- `StageCount = ceil(lengthDays / DaysPerStep)`，至少 1。
+- `StepValue = (EndValue - StartValue) / StageCount`，按類別的 granularity 四捨五入：時間 5 分鐘、分鐘 1、小時 0.25。四捨五入後為 0 但起終點不同時，取一個 granularity 的量並帶正確符號。
+
+每天的計算：
+- `doneDays` = 該任務在**今天之前**所有 `QuestProgress.IsDone == true` 的天數，由 `TodayContextLoader` 一次批次載入所有漸進任務的 `DoneDaysBeforeToday`。
+- `Stage = min(StageCount, 1 + floor(doneDays / DaysPerStep))`。第 1 天就是第 1 階，目標已經比現況好一階。
+- `EffectiveTarget = Stage < StageCount ? StartValue + Stage × StepValue : EndValue`。最後一階固定等於終點。今天自己的完成狀態不影響今天的目標，只影響明天。
+
+判定與顯示：
+- Check 型：`Name` 存樣板含 `{target}` 佔位，API 出口用 `TimeOfDay.Format(EffectiveTarget)` 替換。
+- Count／Limit 型：`EffectiveTarget` 當 `targetValue`，`Name` 不含佔位。
+- 一律附 `progression` 物件含 `goalId`、`stage`、`stageCount`、`targetLabel`。
+- 判定（是否達標）與完成率計算一律用 `EffectiveTarget` 而非 `quest.TargetValue`；一般任務的 `EffectiveTarget` 就是 `TargetValue`。
+- `QuestProgress.TargetSnapshot` 記錄當天判定用的目標值。
+
+**目標封存**
+
+目標的 `IsArchived` 為 true 時連帶封存其未封存的任務；已結算的日子的達標率不變。漸進任務的目標欄位（`targetValue` 等）不可編輯，要改就封存目標重建。
+
 ## 5. 資料模型（EF Core 實體）
 
 所有主鍵為 `Guid`（`uuid`），皆有 `CreatedAt`（`bigint`，Unix 毫秒）。所有時間戳欄位（`CreatedAt`、`ArchivedAt`、`SettledAt`、`OccurredAt`）同此規則；欄位註解須標明單位。
@@ -160,12 +204,13 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 | User | Id；Email（citext，unique）；PasswordHash；DisplayName（≤ 40）；TimeZoneId（IANA，預設 `Asia/Taipei`） |
 | Player | UserId（PK，FK User）；Level int ≥ 1；Xp int ≥ 0；Str/Vit/Int/Wil/Spi int ≥ 0；HardMode bool；Streak int；BestStreak int；TotalCompleted int；LastSettledDate DateOnly nullable |
 | Program | Id；UserId（FK）；StartDate DateOnly；Cycle int；LengthDays int = 66；IsActive bool；每使用者同時只有一筆 IsActive = true（partial unique index） |
-| Quest | Id；UserId（FK）；Name（≤ 60）；StatType enum；Difficulty enum；QuestType enum；TargetValue decimal(10,2) nullable；Step decimal(10,2) nullable；Unit（≤ 10）nullable；SortOrder int；IsArchived bool；ArchivedAt bigint nullable |
+| Goal | Id；UserId（FK）；Category enum（`Routine`／`Exercise`／`Reading`／`ScreenTime`）；Answers text（JSON）；LengthDays int；StartDate DateOnly；IsArchived bool；ArchivedAt bigint nullable；CreatedAt bigint |
+| Quest | Id；UserId（FK）；GoalId Guid nullable（FK Goal，漸進任務才有值）；Name（≤ 60）；StatType enum；Difficulty enum；QuestType enum；TargetValue decimal(10,2) nullable；Step decimal(10,2) nullable；Unit（≤ 10）nullable；ValueKind enum nullable（`Number`／`TimeOfDay`，漸進任務才有值）；StartValue decimal(10,2) nullable；EndValue decimal(10,2) nullable；StepValue decimal(10,2) nullable；StageCount int nullable；DaysPerStep int nullable；SortOrder int；IsArchived bool；ArchivedAt bigint nullable |
 | DailyLog | Id；UserId（FK）；Date DateOnly；unique(UserId, Date)；CompletionRatio decimal(5,4)；IsCleared bool；BonusGranted bool；Note text nullable；IsSettled bool；SettledAt bigint nullable |
-| QuestProgress | Id；DailyLogId（FK）；QuestId（FK）；unique(DailyLogId, QuestId)；Value decimal(10,2) nullable；IsDone bool；XpGranted int；StatGranted int |
+| QuestProgress | Id；DailyLogId（FK）；QuestId（FK）；unique(DailyLogId, QuestId)；Value decimal(10,2) nullable；IsDone bool；XpGranted int；StatGranted int；TargetSnapshot decimal(10,2) nullable |
 | XpEvent | Id；UserId（FK）；Amount int（可負）；Source enum {Quest, QuestUndo, DailyBonus, DailyBonusUndo, Penalty}；RefId Guid nullable；OccurredAt bigint |
 
-索引：`XpEvent(UserId, OccurredAt)`、`Quest(UserId, IsArchived)`、`DailyLog(UserId, Date)`。
+索引：`XpEvent(UserId, OccurredAt)`、`Quest(UserId, IsArchived)`、`DailyLog(UserId, Date)`、`Goal(UserId, IsArchived)`、`Goal` 部分唯一索引 `(UserId, Category) WHERE IsArchived = false`。
 
 ## 6. API 規格
 
@@ -173,16 +218,21 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 
 | 方法與路徑 | 用途 | 請求 | 回應 |
 | --- | --- | --- | --- |
-| POST /auth/register | 註冊 | `{email, password, displayName, timeZoneId?}` | 201 `{token, user}`；建立 Player、Program、預設任務 |
+| POST /auth/register | 註冊 | `{email, password, displayName, timeZoneId?}` | 201 `{token, user}`；建立 Player、Program；不再建立預設任務 |
 | POST /auth/login | 登入 | `{email, password}` | 200 `{token, user}`；失敗 401 |
-| GET /me | 玩家總覽 | — | `{user:{id, email, displayName, timeZoneId}, player:{level, xp, xpNeeded, rank, title, stats:{str,vit,int,wil,spi}, hardMode, displayStreak, bestStreak, totalCompleted}, program:{startDate, cycle, dayNumber, lengthDays, isCompleted}}` |
+| GET /me | 玩家總覽 | — | `{user:{id, email, displayName, timeZoneId}, player:{level, xp, xpNeeded, rank, title, stats:{str,vit,int,wil,spi}, hardMode, displayStreak, bestStreak, totalCompleted}, program:{startDate, cycle, dayNumber, lengthDays, isCompleted}, needsOnboarding}` |
 | PATCH /me | 更新設定 | `{displayName?, timeZoneId?, hardMode?}` | 200 同 GET /me；hardMode 變更觸發 4.5 |
-| GET /quests | 任務清單 | — | `[{id, name, statType, difficulty, questType, targetValue, step, unit, sortOrder}]`，不含已封存 |
+| GET /goals/categories | 目標類別定義 | — | 類別表與基本任務清單，前端畫表單用 |
+| POST /goals/preview | 預覽目標產生的任務 | `{goals:[{category, answers}], basicQuestIndexes?}` | 不寫入，回每個目標的任務與階段摘要 |
+| POST /goals | 建立目標與任務 | `{goals:[{category, answers}], basicQuestIndexes?}` | 201；回 `GET /goals` 格式，其他欄位或同類別已有進行中的回 400/409 |
+| GET /goals | 目標清單 | — | `{goals:[{id, category, title, lengthDays, startDate, quests:[{id, name, stage, stageCount, isArchived}]}]}` |
+| DELETE /goals/{id} | 封存目標與其任務 | — | 204；重算今日達標率 |
+| GET /quests | 任務清單 | — | `[{id, name, statType, difficulty, questType, targetValue, step, unit, sortOrder, goalId?}]`，不含已封存 |
 | POST /quests | 新增 | `{name, statType, difficulty, questType, targetValue?, step?, unit?}` | 201 任務；Count/Limit 缺 targetValue 回 400 |
-| PUT /quests/{id} | 修改 | 同 POST | 200 任務；套用 4.9 |
-| DELETE /quests/{id} | 封存 | — | 204 |
+| PUT /quests/{id} | 修改 | 同 POST | 200 任務；漸進任務只允許改 statType、difficulty，其他回 400 `ProgressionQuestLocked`；套用 4.9 |
+| DELETE /quests/{id} | 封存 | — | 204；漸進任務可單獨封存 |
 | PUT /quests/reorder | 排序 | `{questIds:[...]}` | 204 |
-| GET /today | 今日任務與進度 | — | `{date, completionRatio, isCleared, threshold, bonusGranted, note, quests:[{...任務欄位, value, isDone, xpReward, statReward}]}` |
+| GET /today | 今日任務與進度 | — | `{date, completionRatio, isCleared, threshold, bonusGranted, note, quests:[{...任務欄位, value, isDone, xpReward, statReward, progression?}]}` |
 | PUT /today/quests/{id}/progress | 寫入進度 | `{value: number 或 null}` | 200 同 GET /today；Check 類型只接受 0 或 1；Count 負值回 400 |
 | PUT /today/note | 今日反思 | `{note}`（≤ 2000 字） | 204 |
 | GET /history?from=YYYY-MM-DD&to=YYYY-MM-DD | 每日紀錄 | 區間 ≤ 100 天 | `[{date, completionRatio, isCleared, doneQuestIds:[...], note}]`，含今日的即時值 |
@@ -221,12 +271,13 @@ Settle(userId, now):
 
 ## 8. 前端（第一階段）
 
-只做四個畫面，行動優先，純 HTML + JS，放在 `src/SoloLeveling.Api/wwwroot`：
+做五個畫面，行動優先，純 HTML + JS，放在 `src/SoloLeveling.Api/wwwroot`：
 
 1. 登入／註冊。
-2. 今日：頂部顯示 Level、EXP 進度條、階級與稱號、displayStreak、今日完成度；下方依屬性分組列任務：Check 顯示勾選框，Count 顯示 −/＋ 與 `value/target unit`，Limit 顯示數字輸入框。每次操作呼叫 PUT progress 並以回應覆蓋畫面。
-3. 進度：66 格日曆（GET /history 自 program.startDate 起 66 天），五維屬性數值，最近 7 天各任務完成點。
-4. 設定：困難模式開關、任務新增／編輯／封存、開新 66 天。
+2. 引導（新帳號）：三步流程，(1) 勾選要建立的目標類別（至少一個、多個且同類別最多一個）；(2) 逐類別填表，表單依 GET /goals/categories 產生，`time` 用 `<input type="time">`；(3) 預覽呼叫 POST /goals/preview，顯示每個任務的起終點、階數、每階變化，下方列基本任務勾選清單（被取代的預設不勾且停用）。確認呼叫 POST /goals 後進入今日畫面。
+3. 今日：漸進任務名字含當天 EffectiveTarget，右側小字「第 1／10 階」；其他不變。
+4. 進度：66 格日曆（GET /history 自 program.startDate 起 66 天），五維屬性數值，最近 7 天各任務完成點。
+5. 設定：困難模式開關、任務新增／編輯；新增「目標」區塊列未封存目標（含類別、開始日、各任務階段），每個目標有「封存」（二次確認）；「新增目標」按鈕進只做一個類別的引導流程（類別選單排除已有進行中的）；編輯漸進任務時鎖住相關欄位；開新 66 天。
 
 ## 9. 測試要求（最少）
 
@@ -258,7 +309,10 @@ Settle(userId, now):
 
 ## 11. 驗收清單
 
-- [ ] `docker compose up` 後可註冊、登入、看到 9 個預設任務。
+- [ ] `docker compose up` 後可註冊、登入，新帳號進入引導流程；選作息與閱讀、填現況與目標、預覽看到階數摘要、確認後今日頁出現任務且名字帶第 1 階時間。
+- [ ] 連續勾完成 3 天後，第 4 天就寢任務的時間提早；某天不勾，隔天時間不變。
+- [ ] 設定頁看得到目標與階段，封存目標後任務消失。
+- [ ] 既有帳號（已有任務者）登入行為不變，無需引導。
 - [ ] 勾完 7 個任務（70%）在一般模式看到 isCleared = true 與 +30 EXP 事件。
 - [ ] 把系統時間往後撥一天再呼叫 GET /today，前一天出現在 /history 且 displayStreak 正確。
 - [ ] 困難模式下漏一天，XpEvent 出現一筆 Penalty，Level 不變。

@@ -43,17 +43,21 @@ flowchart LR
 | `Entities/User.cs` | 帳號：Email、PasswordHash、DisplayName、TimeZoneId（IANA） |
 | `Entities/Player.cs` | 遊戲化狀態（以 UserId 為主鍵）：Level、Xp、五維屬性、HardMode、Streak、BestStreak、TotalCompleted、LastSettledDate；`AddStat` 增減屬性且最低 0 |
 | `Entities/Program.cs` | 66 天週期：StartDate、Cycle、LengthDays（`DefaultLengthDays = 66`）、IsActive |
-| `Entities/Quest.cs` | 任務定義：StatType、Difficulty、QuestType、TargetValue、Step、Unit、SortOrder、IsArchived／ArchivedAt |
+| `Entities/Quest.cs` | 任務定義：StatType、Difficulty、QuestType、TargetValue、Step、Unit、SortOrder、IsArchived／ArchivedAt；漸進任務加 GoalId、ValueKind、StartValue、EndValue、StepValue、StageCount、DaysPerStep |
+| `Entities/Goal.cs` | 目標：Category、Answers（JSON）、LengthDays、StartDate、IsArchived／ArchivedAt；`Quests` 導覽集合 |
 | `Entities/DailyLog.cs` | 某人某天的快照：CompletionRatio、IsCleared、BonusGranted、Note、IsSettled／SettledAt、`Progresses` 導覽集合 |
-| `Entities/QuestProgress.cs` | 某天某任務的進度：Value、IsDone、XpGranted、StatGranted |
+| `Entities/QuestProgress.cs` | 某天某任務的進度：Value、IsDone、XpGranted、StatGranted、TargetSnapshot |
 | `Entities/XpEvent.cs` | EXP 流水：Amount（可負）、Source、RefId、OccurredAt、Seq |
-| `Enums.cs` | `StatType`、`Difficulty`、`QuestType`、`XpSource` |
-| `DefaultQuests.cs` | 註冊時建立的 9 個預設任務 |
+| `Enums.cs` | `StatType`、`Difficulty`、`QuestType`、`XpSource`、`GoalCategory`、`ProgressionValueKind` |
+| `DefaultQuests.cs` | 基本任務的 9 個樣板 |
 | `DomainValidationException.cs` | 規則層輸入不合法，API 對應 400 |
+| `Goals/` | `GoalCategories`：四個類別定義；`GoalPlanner`：依回答產生任務樣板；`GoalCategoryDefinition` 與 `RoutineGoal`、`ExerciseGoal`、`ReadingGoal`、`ScreenTimeGoal` 實作 |
 | `Rules/Leveling.cs` | `XpNeeded`、`GainXp`（連續升級）、`LoseXp`（撤銷，可降級）、`ApplyPenalty`（不降級）、`RankOf` |
 | `Rules/CompletionRules.cs` | `IsDone`、`RewardOf`、`ThresholdOf`、`CompletionRatio`（四捨五入到 4 位）、`PenaltyOf`、`DailyBonusXp` 等常數 |
-| `Rules/ProgressUpdater.cs` | `SetValue`（寫進度＋發／收回任務獎勵）、`Recalculate`（重算達標率與達標獎勵）、`ClearQuestProgress`（改任務類型時清除今日進度） |
+| `Rules/ProgressUpdater.cs` | `SetValue`（帶 `doneDaysBeforeToday` 計算 `EffectiveTarget`、寫進度＋發／收回任務獎勵、寫 `TargetSnapshot`）、`Recalculate`（重算達標率與達標獎勵）、`ClearQuestProgress`（改任務類型時清除今日進度） |
 | `Rules/Settlement.cs` | `Settle`：結算演算法的純規則部分，回傳 `SettlementResult(Today, TodayLog, NewLogs, Events)`；常數 `MaxCatchUpDays = 400`、`MaxPenaltiesPerSettlement = 3` |
+| `Rules/TimeOfDay.cs` | `Parse(hh:mm)`、`Format(minutes)` 轉換時間編碼 |
+| `Rules/Progression.cs` | `EffectiveTarget`、`RenderName`：計算漸進任務的目標與顯示名稱 |
 | `Rules/UserClock.cs` | `DateOf(utc, timeZoneId)`：全專案唯一決定「今日」的地方 |
 
 ### SoloLeveling.Infrastructure
@@ -71,22 +75,25 @@ flowchart LR
 | --- | --- |
 | `Program.cs` | DI 註冊、Options 驗證、JWT、JSON converter、統一錯誤格式、啟動時 migrate、中介軟體順序 |
 | `AppOptions.cs` | `DatabaseConnectionString`、`JwtSecret`（`[Required]`，JwtSecret `[MinLength(32)]`）；JWT 簽發與驗證都從這裡取金鑰 |
-| `Controllers/AuthController.cs` | `POST /auth/register`、`POST /auth/login`（不需驗證） |
-| `Controllers/MeController.cs` | `GET /me`、`PATCH /me` |
-| `Controllers/QuestsController.cs` | `GET/POST /quests`、`PUT /quests/reorder`、`PUT/DELETE /quests/{id}` |
-| `Controllers/TodayController.cs` | `GET /today`、`PUT /today/quests/{id}/progress`、`PUT /today/note` |
+| `Controllers/AuthController.cs` | `POST /auth/register`（不再建任務）、`POST /auth/login`（不需驗證） |
+| `Controllers/MeController.cs` | `GET /me`（加 `needsOnboarding`）、`PATCH /me` |
+| `Controllers/GoalsController.cs` | `GET /goals/categories`、`POST /goals/preview`、`POST /goals`、`GET /goals`、`DELETE /goals/{id}` |
+| `Controllers/QuestsController.cs` | `GET/POST /quests`（加 `goalId`）、`PUT /quests/reorder`、`PUT/DELETE /quests/{id}`（漸進任務只允許改屬性） |
+| `Controllers/TodayController.cs` | `GET /today`（任務加 `progression`）、`PUT /today/quests/{id}/progress`、`PUT /today/note` |
 | `Controllers/HistoryController.cs` | `GET /history`、`GET /xp-events` |
 | `Controllers/ProgramController.cs` | `POST /program/restart` |
-| `Services/TodayContextLoader.cs` | `LoadAsync`：先結算，再載入 User、Player、今日 DailyLog（含 Progresses）、未封存任務，回傳 `TodayContext` |
-| `Services/AccountService.cs` | 註冊（建立 User、Player、第 1 週期、9 個預設任務）、登入、`ValidateTimeZone` |
-| `Services/PlayerService.cs` | `/me` 查詢與更新；切換困難模式時呼叫 `ProgressUpdater.Recalculate` |
-| `Services/QuestService.cs` | 任務 CRUD 與排序；新增／修改／封存後重算今日達標 |
-| `Services/TodayService.cs` | 今日查詢、進度寫入、反思筆記；`Build` 組 `TodayResponse` |
+| `Services/TodayContextLoader.cs` | `LoadAsync`：先結算，再載入 User、Player、今日 DailyLog（含 Progresses）、未封存任務、漸進任務的 `DoneDaysBeforeToday`，回傳 `TodayContext` |
+| `Services/AccountService.cs` | 註冊（建立 User、Player、第 1 週期；不再建任務）、登入、`ValidateTimeZone` |
+| `Services/GoalService.cs` | 目標 CRUD；建立時驗證、產生任務、檢查重複；封存時連帶封存任務 |
+| `Services/PlayerService.cs` | `/me` 查詢與更新（加 `needsOnboarding` = 無未封存任務）；切換困難模式時呼叫 `ProgressUpdater.Recalculate` |
+| `Services/QuestService.cs` | 任務 CRUD 與排序；新增／修改／封存後重算今日達標；漸進任務禁止編輯目標欄位 |
+| `Services/TodayService.cs` | 今日查詢、進度寫入、反思筆記；`Build` 組 `TodayResponse`（漸進任務加 `progression` 物件） |
 | `Services/HistoryService.cs` | 每日紀錄（區間 ≤ 100 天）與 EXP 流水（limit 夾在 1–200） |
 | `Services/ProgramService.cs` | 開新 66 天週期 |
 | `Services/SettlementScheduler.cs` | `BackgroundService`，啟動時跑一次、之後每小時 `RunOnceAsync` |
+| `Contracts/GoalDtos.cs` | Goal 與 progression 相關的 DTO |
 | `Contracts/Dtos.cs`、`Contracts/TodayDtos.cs` | 請求／回應 record |
-| `Contracts/Mappers.cs` | 實體轉 DTO（`ToDto`）、`ToUnixSeconds`（唯一的秒換算處） |
+| `Contracts/Mappers.cs` | 實體轉 DTO（`ToDto`）、`ToUnixSeconds`（唯一的秒換算處）、`EffectiveTarget` 計算與名稱渲染 |
 | `Contracts/StatTypeJsonConverter.cs` | `StatType` ↔ `STR/VIT/INT/WIL/SPI` |
 | `Errors/ApiErrorException.cs` | 帶狀態碼與錯誤代碼的例外，含 `BadRequest／Unauthorized／NotFound／Conflict` 工廠方法 |
 | `Errors/ErrorHandlingMiddleware.cs` | 把 `ApiErrorException`、`DomainValidationException` 轉成 `{ error: { code, message } }` |
@@ -103,11 +110,12 @@ flowchart LR
    - `SELECT * FROM "Players" WHERE "UserId" = … FOR UPDATE` 鎖住 Player 列；同一使用者的其他請求在此排隊。
    - 以 `UserClock.DateOf(now, user.TimeZoneId)` 算出今日，載入待結算區間到今日的 DailyLog。
    - `Settlement.Settle` 逐日結算到昨日，並確保今日的 DailyLog 存在；新紀錄與懲罰事件 `AddRange` 後 `SaveChangesAsync`（仍在交易內，不 commit）。
+   - 對所有未封存的漸進任務，**一次批次查詢**「今天之前 `IsDone == true` 的天數」，做成 `IReadOnlyDictionary<Guid, int>` 放進 `TodayContext.DoneDaysBeforeToday`。
 4. **載入今日內容**：loader 取 User、Player（已被追蹤的同一個實體）、今日 DailyLog 的 QuestProgress（EF 自動掛回 `Progresses`）、未封存任務（依 SortOrder）。
 5. **找任務**：不在 `ActiveQuests` 裡就丟 `ApiErrorException.NotFound("QuestNotFound", …)`，交易隨 `await using` 釋放而回滾。
-6. **套規則**：先記下既有進度的 Id，再呼叫 `ProgressUpdater.SetValue`：
-   - 驗證值（Check 只能 0／1，Count／Limit 不可為負，否則丟 `DomainValidationException`）。
-   - 沒有進度就新建 `QuestProgress` 並加入 `log.Progresses`。
+6. **套規則**：先記下既有進度的 Id，再呼叫 `ProgressUpdater.SetValue`（傳入 `context.DoneDaysBeforeToday` 以計算漸進任務的 `EffectiveTarget`）：
+   - 驗證值（Check 只能 0／1，Count／Limit 不可為負，否則丟 `DomainValidationException`）；判定與完成率計算一律用 `Progression.EffectiveTarget` 而非 `quest.TargetValue`。
+   - 沒有進度就新建 `QuestProgress` 並加入 `log.Progresses`；`SetValue` 寫入當天的 `TargetSnapshot`。
    - 依完成狀態變化發放或撤銷 EXP、屬性、TotalCompleted，產生 `Quest`／`QuestUndo` 事件。
    - `Recalculate` 重算達標率與 IsCleared，必要時產生 `DailyBonus`／`DailyBonusUndo` 事件，並更新 BestStreak。
 7. **持久化**：把新進度明確 `db.QuestProgresses.AddRange`（避免被當成 Modified），事件 `db.XpEvents.AddRange`，`SaveChangesAsync`。
@@ -148,9 +156,10 @@ flowchart LR
 | `Users` | 帳號 | `Email` 為 `citext`，unique（大小寫不敏感）；`DisplayName` ≤ 40、`TimeZoneId` ≤ 64 |
 | `Players` | 玩家狀態，與 User 一對一 | PK = FK `UserId` |
 | `Programs` | 66 天週期 | partial unique index `UserId WHERE "IsActive" = true`（每人一筆進行中） |
-| `Quests` | 任務定義 | index `(UserId, IsArchived)`；`Name` ≤ 60、`Unit` ≤ 10；`TargetValue`、`Step` 為 `numeric(10,2)` |
+| `Goals` | 漸進目標 | `Category` 存字串；`Answers` 為 jsonb；index `(UserId, IsArchived)`；partial unique index `(UserId, Category) WHERE "IsArchived" = false` |
+| `Quests` | 任務定義 | index `(UserId, IsArchived)`；`Name` ≤ 60、`Unit` ≤ 10；`TargetValue`、`Step` 為 `numeric(10,2)`；漸進任務有 `GoalId`、`ValueKind`、`StartValue`、`EndValue`、`StepValue`、`StageCount`、`DaysPerStep`；階段不存 DB，由 `TodayContext.DoneDaysBeforeToday` 計算 |
 | `DailyLogs` | 每日快照 | unique `(UserId, Date)`；`CompletionRatio` 為 `numeric(5,4)` |
-| `QuestProgresses` | 某天某任務的進度 | unique `(DailyLogId, QuestId)`；`Value` 為 `numeric(10,2)` |
+| `QuestProgresses` | 某天某任務的進度 | unique `(DailyLogId, QuestId)`；`Value` 為 `numeric(10,2)`；`TargetSnapshot` 記錄當天判定用的 `EffectiveTarget` |
 | `XpEvents` | EXP 流水 | index `(UserId, OccurredAt)`；`Seq` 為 `bigint GENERATED ALWAYS AS IDENTITY` |
 
 - **enum**：`Quest.StatType／Difficulty／QuestType`、`XpEvent.Source` 存字串（最長 16）。

@@ -67,11 +67,15 @@ dotnet format --verify-no-changes
 所有端點在 `/api/v1`，除 `auth` 外都要 `Authorization: Bearer <token>`。時間戳一律 Unix 秒，日期一律 `YYYY-MM-DD`。錯誤統一為 `{ "error": { "code", "message" } }`。
 
 ```bash
-# 註冊（自動建立 9 個預設任務）
+# 註冊（不再自動建立任務，見下方建立目標）
 curl -s localhost:8080/api/v1/auth/register -H 'Content-Type: application/json' \
   -d '{"email":"me@example.com","password":"password123","displayName":"小明","timeZoneId":"Asia/Taipei"}'
 
 TOKEN=...   # 上面回應的 token
+
+# 建立目標（引導流程的最後一步；也可只帶 basicQuestIndexes 加入基本任務）
+curl -s -X POST localhost:8080/api/v1/goals -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"goals":[{"category":"Routine","answers":{"currentBedtime":"01:00","targetBedtime":"00:00","currentWakeTime":"08:00","targetWakeTime":"07:00","lengthDays":30}}],"basicQuestIndexes":[2,4,6,8]}'
 
 # 玩家總覽
 curl -s localhost:8080/api/v1/me -H "Authorization: Bearer $TOKEN"
