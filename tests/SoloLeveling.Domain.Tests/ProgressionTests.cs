@@ -24,6 +24,23 @@ public class ProgressionTests
         };
     }
 
+    private static Quest WakeTime(decimal start, decimal end, int stageCount, decimal step)
+    {
+        return new Quest
+        {
+            Id = Guid.NewGuid(),
+            Name = "{target} 前起床",
+            QuestType = QuestType.Check,
+            GoalId = Guid.NewGuid(),
+            ValueKind = ProgressionValueKind.TimeOfDayEvening,
+            StartValue = start,
+            EndValue = end,
+            StepValue = step,
+            StageCount = stageCount,
+            DaysPerStep = 3,
+        };
+    }
+
     private static Quest Reading(decimal start, decimal end, int stageCount, decimal step)
     {
         return new Quest
@@ -124,10 +141,41 @@ public class ProgressionTests
     }
 
     [Fact]
+    public void RenderName_傍晚基準_以當階時間取代佔位()
+    {
+        // 起床以 18:00 為基準；08:00→07:00、10 階、每階 -5：第 1 階 840-5=835 → Format(835, 18) = 07:55
+        Progression.RenderName(WakeTime(840, 780, 10, -5), 0).Should().Be("07:55 前起床");
+    }
+
+    [Fact]
+    public void RenderFinalName_時間類_以終點取代佔位()
+    {
+        Progression.RenderFinalName(Bedtime(780, 720, 10, -5)).Should().Be("00:00 前上床睡覺");
+    }
+
+    [Fact]
+    public void RenderFinalName_傍晚基準_以終點取代佔位()
+    {
+        Progression.RenderFinalName(WakeTime(840, 780, 10, -5)).Should().Be("07:00 前起床");
+    }
+
+    [Fact]
+    public void RenderFinalName_一般任務_原名()
+    {
+        Progression.RenderFinalName(new Quest { Name = "喝水" }).Should().Be("喝水");
+    }
+
+    [Fact]
     public void TargetLabel_時間類與數字類()
     {
         Progression.TargetLabel(Bedtime(780, 720, 10, -5), 775).Should().Be("00:55");
         Progression.TargetLabel(Reading(10, 30, 10, 2), 12).Should().Be("12 分鐘");
         Progression.TargetLabel(Reading(3, 2, 4, -0.25m), 2.75m).Should().Be("2.75 分鐘");
+    }
+
+    [Fact]
+    public void TargetLabel_傍晚基準時間類()
+    {
+        Progression.TargetLabel(WakeTime(840, 780, 10, -5), 835).Should().Be("07:55");
     }
 }

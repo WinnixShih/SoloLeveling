@@ -37,8 +37,8 @@ public sealed class RoutineGoal : GoalCategoryDefinition
     {
         var bedStart = ReadTime(answers, "currentBedtime");
         var bedEnd = ReadTime(answers, "targetBedtime");
-        var wakeStart = ReadTime(answers, "currentWakeTime");
-        var wakeEnd = ReadTime(answers, "targetWakeTime");
+        var wakeStart = ReadTime(answers, "currentWakeTime", 18);
+        var wakeEnd = ReadTime(answers, "targetWakeTime", 18);
         RequireBetter(bedEnd <= bedStart, "就寢時間");
         RequireBetter(wakeEnd <= wakeStart, "起床時間");
 
@@ -48,7 +48,7 @@ public sealed class RoutineGoal : GoalCategoryDefinition
         [
             new("{target} 前上床睡覺", StatType.Vitality, Difficulty.Normal, QuestType.Check, ProgressionValueKind.TimeOfDay,
                 bedStart, bedEnd, bed.Step, bed.StageCount, bed.DaysPerStep, null, null),
-            new("{target} 前起床", StatType.Vitality, Difficulty.Hard, QuestType.Check, ProgressionValueKind.TimeOfDay,
+            new("{target} 前起床", StatType.Vitality, Difficulty.Hard, QuestType.Check, ProgressionValueKind.TimeOfDayEvening,
                 wakeStart, wakeEnd, wake.Step, wake.StageCount, wake.DaysPerStep, null, null),
         ];
     }

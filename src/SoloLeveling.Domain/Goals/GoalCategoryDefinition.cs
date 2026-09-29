@@ -37,10 +37,11 @@ public abstract class GoalCategoryDefinition
     /// </summary>
     /// <param name="answers">回答。</param>
     /// <param name="key">鍵。</param>
-    /// <returns>距中午的分鐘數。</returns>
-    protected static int ReadTime(IReadOnlyDictionary<string, string> answers, string key)
+    /// <param name="baseHour">編碼基準時刻的小時，預設中午 12 點。</param>
+    /// <returns>距基準時刻的分鐘數。</returns>
+    protected static int ReadTime(IReadOnlyDictionary<string, string> answers, string key, int baseHour = 12)
     {
-        return TimeOfDay.Parse(answers[key]);
+        return TimeOfDay.Parse(answers[key], baseHour);
     }
 
     /// <summary>
@@ -85,6 +86,11 @@ public abstract class GoalCategoryDefinition
     /// <returns>(StepValue, StageCount, DaysPerStep)。</returns>
     protected static (decimal Step, int StageCount, int DaysPerStep) Schedule(decimal start, decimal end, int lengthDays, decimal granularity)
     {
+        if (start == end)
+        {
+            return (0, 1, Progression.DefaultDaysPerStep);
+        }
+
         var stageCount = Progression.StageCountFor(lengthDays, Progression.DefaultDaysPerStep);
         return (Progression.StepFor(start, end, stageCount, granularity), stageCount, Progression.DefaultDaysPerStep);
     }

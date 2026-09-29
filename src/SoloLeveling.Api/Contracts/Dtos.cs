@@ -89,7 +89,7 @@ public record QuestRequest(string Name, StatType StatType, Difficulty Difficulty
 
 /// <summary>任務。</summary>
 /// <param name="Id">任務 ID。</param>
-/// <param name="Name">名稱；漸進的時間類任務為含 <c>{target}</c> 的樣板，今日 API 才會渲染。</param>
+/// <param name="Name">名稱；漸進時間類任務為以終點渲染的名稱。</param>
 /// <param name="StatType">屬性代碼。</param>
 /// <param name="Difficulty">難度。</param>
 /// <param name="QuestType">任務類型。</param>

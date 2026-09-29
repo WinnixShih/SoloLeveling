@@ -7,7 +7,7 @@ namespace SoloLeveling.Api.Contracts;
 /// <summary>引導問題。</summary>
 /// <param name="Key">回答的鍵。</param>
 /// <param name="Label">顯示文字。</param>
-/// <param name="Type">回答型別（time／integer／decimal）。</param>
+/// <param name="Type">回答型別（Time／Integer／Decimal）。</param>
 /// <param name="Min">最小值。</param>
 /// <param name="Max">最大值。</param>
 /// <param name="Default">預設值。</param>

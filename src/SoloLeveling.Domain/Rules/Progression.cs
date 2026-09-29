@@ -103,13 +103,30 @@ public static class Progression
     /// <returns>顯示名稱。</returns>
     public static string RenderName(Quest quest, int doneDaysBeforeToday)
     {
-        if (quest.ValueKind != ProgressionValueKind.TimeOfDay)
+        if (!IsTimeKind(quest.ValueKind))
         {
             return quest.Name;
         }
 
         var target = EffectiveTarget(quest, doneDaysBeforeToday) ?? 0;
-        return quest.Name.Replace(TargetPlaceholder, TimeOfDay.Format(target), StringComparison.Ordinal);
+        return quest.Name.Replace(TargetPlaceholder, TimeOfDay.Format(target, BaseHourOf(quest.ValueKind!.Value)), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 以終點渲染的顯示名稱：時間類把名稱樣板的 <c>{target}</c> 換成 <see cref="Quest.EndValue"/>；其他原樣。
+    /// 給不結算、無法算出當天達標天數的端點（例如 GET /quests）使用。
+    /// </summary>
+    /// <param name="quest">任務。</param>
+    /// <returns>顯示名稱。</returns>
+    public static string RenderFinalName(Quest quest)
+    {
+        if (!IsTimeKind(quest.ValueKind))
+        {
+            return quest.Name;
+        }
+
+        var end = quest.EndValue ?? 0;
+        return quest.Name.Replace(TargetPlaceholder, TimeOfDay.Format(end, BaseHourOf(quest.ValueKind!.Value)), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -120,12 +137,33 @@ public static class Progression
     /// <returns>顯示文字。</returns>
     public static string TargetLabel(Quest quest, decimal target)
     {
-        if (quest.ValueKind == ProgressionValueKind.TimeOfDay)
+        if (IsTimeKind(quest.ValueKind))
         {
-            return TimeOfDay.Format(target);
+            return TimeOfDay.Format(target, BaseHourOf(quest.ValueKind!.Value));
         }
 
         var number = target.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
         return string.IsNullOrEmpty(quest.Unit) ? number : $"{number} {quest.Unit}";
+    }
+
+    /// <summary>
+    /// 是否為時間類目標值種類（<see cref="ProgressionValueKind.TimeOfDay"/> 或
+    /// <see cref="ProgressionValueKind.TimeOfDayEvening"/>）。
+    /// </summary>
+    /// <param name="kind">目標值種類。</param>
+    /// <returns>是否為時間類。</returns>
+    public static bool IsTimeKind(ProgressionValueKind? kind)
+    {
+        return kind is ProgressionValueKind.TimeOfDay or ProgressionValueKind.TimeOfDayEvening;
+    }
+
+    /// <summary>
+    /// 時間類的編碼基準時刻：就寢用中午 12:00，起床用 18:00。
+    /// </summary>
+    /// <param name="kind">時間類的目標值種類。</param>
+    /// <returns>基準時刻的小時（0–23）。</returns>
+    public static int BaseHourOf(ProgressionValueKind kind)
+    {
+        return kind == ProgressionValueKind.TimeOfDayEvening ? 18 : 12;
     }
 }

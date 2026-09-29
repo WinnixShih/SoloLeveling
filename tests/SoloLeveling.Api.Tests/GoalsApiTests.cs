@@ -87,6 +87,14 @@ public sealed class GoalsApiTests(PostgresFixture fixture) : IDisposable
         quest.GetProperty("stageCount").GetInt32().Should().Be(10);
         quest.GetProperty("daysPerStep").GetInt32().Should().Be(3);
         quest.GetProperty("stepLabel").GetString().Should().Be("提早 5 分鐘");
+
+        // 起床以 18:00 為基準編碼（ValueKind = TimeOfDayEvening），stepLabel 仍是「提早 N 分鐘」而非把分鐘數誤當成絕對時刻
+        var wake = body.GetProperty("goals")[0].GetProperty("quests")[1];
+        wake.GetProperty("name").GetString().Should().Be("07:55 前起床");
+        wake.GetProperty("startLabel").GetString().Should().Be("08:00");
+        wake.GetProperty("endLabel").GetString().Should().Be("07:00");
+        wake.GetProperty("stepLabel").GetString().Should().Be("提早 5 分鐘");
+
         var today = await client.GetFromJsonAsync<JsonElement>("/api/v1/today");
         today.GetProperty("quests").GetArrayLength().Should().Be(0);
     }

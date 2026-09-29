@@ -238,7 +238,7 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, TimeProvide
         var magnitude = Math.Abs(b.StepValue);
         var stepLabel = b.StepValue == 0
             ? "維持"
-            : b.ValueKind == ProgressionValueKind.TimeOfDay
+            : Progression.IsTimeKind(b.ValueKind)
                 ? $"提早 {magnitude:0.##} 分鐘"
                 : $"{(b.StepValue > 0 ? "增加" : "減少")} {Progression.TargetLabel(probe, magnitude)}";
         return new PreviewQuestDto(

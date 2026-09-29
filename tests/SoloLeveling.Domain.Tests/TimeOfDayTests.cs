@@ -42,4 +42,22 @@ public class TimeOfDayTests
         var act = () => TimeOfDay.Parse(text);
         act.Should().Throw<DomainValidationException>().Which.Code.Should().Be("InvalidTime");
     }
+
+    [Theory]
+    [InlineData("18:00", 0)]
+    [InlineData("07:00", 780)]
+    [InlineData("12:30", 1110)]
+    public void Parse_以18點為基準_轉成距18點的分鐘數(string text, int expected)
+    {
+        TimeOfDay.Parse(text, 18).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(0, "18:00")]
+    [InlineData(780, "07:00")]
+    [InlineData(1110, "12:30")]
+    public void Format_以18點為基準_轉回HHMM(int minutes, string expected)
+    {
+        TimeOfDay.Format(minutes, 18).Should().Be(expected);
+    }
 }

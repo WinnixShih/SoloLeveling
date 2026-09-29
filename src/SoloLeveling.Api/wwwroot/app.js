@@ -503,9 +503,15 @@
         location.hash = '#onboarding';
         return;
       }
+      // 已完成引導就不該再進引導頁（例如使用者手動改網址）
+      if (!state.me.needsOnboarding && hash === 'onboarding') {
+        location.hash = '#today';
+        return;
+      }
       if (hash === 'onboarding') {
         $nav.classList.add('hidden');
-        await renderOnboarding({ single: false });
+        const { goals } = await api('GET', '/goals');
+        await renderOnboarding({ single: false, excluded: goals.map((g) => g.category) });
         return;
       }
       $nav.classList.remove('hidden');

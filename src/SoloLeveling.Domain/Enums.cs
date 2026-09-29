@@ -100,4 +100,7 @@ public enum ProgressionValueKind
 
     /// <summary>一天中的時間點，存成距中午 12:00 的分鐘數（見 <c>TimeOfDay</c>）。</summary>
     TimeOfDay = 2,
+
+    /// <summary>一天中的時間點，以 18:00 為基準，供起床時間使用（見 <c>TimeOfDay</c>）。</summary>
+    TimeOfDayEvening = 3,
 }

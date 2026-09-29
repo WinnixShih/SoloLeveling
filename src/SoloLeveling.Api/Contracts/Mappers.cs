@@ -17,12 +17,12 @@ public static class Mappers
         return new UserDto(user.Id, user.Email, user.DisplayName, user.TimeZoneId);
     }
 
-    /// <summary>任務。</summary>
+    /// <summary>任務。GET /quests 不結算、沒有達標天數，漸進時間類任務的名稱以終點渲染（見 <see cref="Progression.RenderFinalName"/>）。</summary>
     /// <param name="quest">任務實體。</param>
     /// <returns>DTO。</returns>
     public static QuestDto ToDto(this Quest quest)
     {
-        return new QuestDto(quest.Id, quest.Name, quest.StatType, quest.Difficulty, quest.QuestType, quest.TargetValue, quest.Step, quest.Unit, quest.SortOrder, quest.GoalId);
+        return new QuestDto(quest.Id, Progression.RenderFinalName(quest), quest.StatType, quest.Difficulty, quest.QuestType, quest.TargetValue, quest.Step, quest.Unit, quest.SortOrder, quest.GoalId);
     }
 
     /// <summary>玩家狀態；displayStreak 依今日是否達標即時加 1。</summary>

@@ -38,8 +38,9 @@ public class GoalPlannerTests
         var wake = quests[1];
         wake.Name.Should().Be("{target} 前起床");
         wake.Difficulty.Should().Be(Difficulty.Hard);
-        wake.StartValue.Should().Be(1200);
-        wake.EndValue.Should().Be(1140);
+        wake.ValueKind.Should().Be(ProgressionValueKind.TimeOfDayEvening);
+        wake.StartValue.Should().Be(840);
+        wake.EndValue.Should().Be(780);
     }
 
     [Fact]
@@ -51,8 +52,29 @@ public class GoalPlannerTests
         quests[0].EndValue.Should().Be(690);
         quests[0].StepValue.Should().BeNegative();
         quests[1].StartValue.Should().Be(quests[1].EndValue);
-        quests[1].StageCount.Should().Be(10);
+        quests[1].StageCount.Should().Be(1);
         quests[1].StepValue.Should().Be(0);
+    }
+
+    [Fact]
+    public void Plan_作息_起終點相同_只有一階且StepValue為0()
+    {
+        var quests = GoalPlanner.Plan(GoalCategory.Routine, Routine("01:00", "00:00", "08:00", "08:00"));
+
+        var wake = quests[1];
+        wake.StageCount.Should().Be(1);
+        wake.StepValue.Should().Be(0);
+    }
+
+    [Fact]
+    public void Plan_作息_中午後起床_合法且逐階提早()
+    {
+        var quests = GoalPlanner.Plan(GoalCategory.Routine, Routine("01:00", "00:00", "12:30", "07:00"));
+
+        var wake = quests[1];
+        wake.StartValue.Should().Be(1110);
+        wake.EndValue.Should().Be(780);
+        wake.StepValue.Should().BeNegative();
     }
 
     [Fact]

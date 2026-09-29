@@ -89,6 +89,26 @@ public sealed class QuestsApiTests(PostgresFixture fixture) : IDisposable
     }
 
     [Fact]
+    public async Task GetQuests_漸進時間類任務_名稱以終點渲染不含樣板佔位()
+    {
+        var client = await _factory.RegisterAsync(seedBasicQuests: false);
+        await client.PostAsJsonAsync("/api/v1/goals", new
+        {
+            goals = new object[]
+            {
+                new { category = "Routine", answers = new { currentBedtime = "01:00", targetBedtime = "00:00", currentWakeTime = "08:00", targetWakeTime = "07:00", lengthDays = 30 } },
+            },
+            basicQuestIndexes = Array.Empty<int>(),
+        });
+
+        var list = await client.GetFromJsonAsync<JsonElement>("/api/v1/quests");
+
+        var names = list.EnumerateArray().Select(q => q.GetProperty("name").GetString()).ToList();
+        names.Should().OnlyContain(n => n != null && !n.Contains("{target}"));
+        names.Should().Contain("00:00 前上床睡覺");
+    }
+
+    [Fact]
     public async Task 操作別人的任務_回404()
     {
         var owner = await _factory.RegisterAsync();
