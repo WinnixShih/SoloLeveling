@@ -68,7 +68,8 @@ public record ProgramDto(DateOnly StartDate, int Cycle, int DayNumber, int Lengt
 /// <param name="User">使用者。</param>
 /// <param name="Player">玩家狀態。</param>
 /// <param name="Program">66 天計畫。</param>
-public record MeResponse(UserDto User, PlayerDto Player, ProgramDto Program);
+/// <param name="NeedsOnboarding">是否需要引導（沒有任何未封存任務）。</param>
+public record MeResponse(UserDto User, PlayerDto Player, ProgramDto Program, bool NeedsOnboarding);
 
 /// <summary>更新設定請求；省略的欄位不動。</summary>
 /// <param name="DisplayName">顯示名稱。</param>

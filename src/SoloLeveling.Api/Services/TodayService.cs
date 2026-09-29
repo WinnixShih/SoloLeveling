@@ -1,5 +1,6 @@
 using SoloLeveling.Api.Contracts;
 using SoloLeveling.Api.Errors;
+using SoloLeveling.Domain;
 using SoloLeveling.Domain.Rules;
 using SoloLeveling.Infrastructure;
 
@@ -47,7 +48,7 @@ public class TodayService(AppDbContext db, TodayContextLoader loader, TimeProvid
             ?? throw ApiErrorException.NotFound("QuestNotFound", "任務不存在");
 
         var existingProgressIds = context.TodayLog.Progresses.Select(p => p.Id).ToHashSet();
-        var events = ProgressUpdater.SetValue(context.Player, context.TodayLog, context.ActiveQuests, quest, value, clock.GetUtcNow(), 0);
+        var events = ProgressUpdater.SetValue(context.Player, context.TodayLog, context.ActiveQuests, quest, value, clock.GetUtcNow(), context.DoneDaysOf(quest.Id));
         // 透過導覽集合新增、且主鍵已設值的實體會被 EF 當成既有資料（Modified），必須明確標成 Added
         db.QuestProgresses.AddRange(context.TodayLog.Progresses.Where(p => !existingProgressIds.Contains(p.Id)));
         db.XpEvents.AddRange(events);
@@ -85,9 +86,15 @@ public class TodayService(AppDbContext db, TodayContextLoader loader, TimeProvid
         {
             progressByQuest.TryGetValue(q.Id, out var progress);
             var reward = CompletionRules.RewardOf(q.Difficulty);
+            var days = context.DoneDaysOf(q.Id);
+            var target = Progression.EffectiveTarget(q, days);
+            var progression = Progression.IsProgression(q)
+                ? new ProgressionDto(q.GoalId!.Value, Progression.StageOf(q, days), q.StageCount ?? 1, Progression.TargetLabel(q, target ?? 0))
+                : null;
             return new TodayQuestDto(
-                q.Id, q.Name, q.StatType, q.Difficulty, q.QuestType, q.TargetValue, q.Step, q.Unit, q.SortOrder,
-                progress?.Value, progress?.IsDone ?? false, reward.Xp, reward.Stat);
+                q.Id, Progression.RenderName(q, days), q.StatType, q.Difficulty, q.QuestType,
+                q.QuestType == QuestType.Check ? null : target, q.Step, q.Unit, q.SortOrder,
+                progress?.Value, progress?.IsDone ?? false, reward.Xp, reward.Stat, progression);
         }).ToList();
 
         var log = context.TodayLog;

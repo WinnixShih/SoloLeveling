@@ -37,8 +37,9 @@ public sealed class ApiFactory(string connectionString, string environment = "De
 
     /// <summary>
     /// 註冊一個隨機 Email 的新使用者並回傳帶 Bearer 的 client。
+    /// 預設會透過 POST /goals 帶入全部 9 個基本任務，維持「註冊即有 9 個任務」的既有測試前提；要測引導流程時傳 <paramref name="seedBasicQuests"/> = false。
     /// </summary>
-    public async Task<HttpClient> RegisterAsync(string timeZoneId = "UTC")
+    public async Task<HttpClient> RegisterAsync(string timeZoneId = "UTC", bool seedBasicQuests = true)
     {
         var client = CreateClient();
         var response = await client.PostAsJsonAsync("/api/v1/auth/register", new
@@ -51,6 +52,12 @@ public sealed class ApiFactory(string connectionString, string environment = "De
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", body.GetProperty("token").GetString());
+        if (seedBasicQuests)
+        {
+            var seeded = await client.PostAsJsonAsync("/api/v1/goals", new { goals = Array.Empty<object>(), basicQuestIndexes = Enumerable.Range(0, 9).ToArray() });
+            seeded.EnsureSuccessStatusCode();
+        }
+
         return client;
     }
 }

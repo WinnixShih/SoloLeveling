@@ -22,7 +22,7 @@ public class AccountService(AppDbContext db, TimeProvider clock, JwtTokenService
     public const int MinPasswordLength = 8;
 
     /// <summary>
-    /// 註冊：建立 User、Player、第 1 個 66 天週期與 9 個預設任務。
+    /// 註冊：建立 User、Player 與第 1 個 66 天週期；任務由引導流程（POST /goals）建立。
     /// </summary>
     /// <param name="request">註冊請求。</param>
     /// <param name="ct">取消權杖。</param>
@@ -68,20 +68,6 @@ public class AccountService(AppDbContext db, TimeProvider clock, JwtTokenService
         db.Users.Add(user);
         db.Players.Add(new Player { UserId = user.Id, CreatedAt = now });
         db.Programs.Add(new ProgramEntity { Id = Guid.NewGuid(), UserId = user.Id, StartDate = today, Cycle = 1, IsActive = true, CreatedAt = now });
-        db.Quests.AddRange(DefaultQuests.All.Select((t, i) => new Quest
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            Name = t.Name,
-            StatType = t.StatType,
-            Difficulty = t.Difficulty,
-            QuestType = t.QuestType,
-            TargetValue = t.TargetValue,
-            Step = t.Step,
-            Unit = t.Unit,
-            SortOrder = i,
-            CreatedAt = now,
-        }));
         await db.SaveChangesAsync(ct);
 
         return new AuthResponse(tokens.CreateToken(user.Id), user.ToDto());

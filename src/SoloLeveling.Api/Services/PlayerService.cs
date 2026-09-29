@@ -72,6 +72,6 @@ public class PlayerService(AppDbContext db, TodayContextLoader loader, TimeProvi
     private async Task<MeResponse> BuildAsync(TodayContext context, CancellationToken ct)
     {
         var program = await db.Programs.AsNoTracking().SingleAsync(p => p.UserId == context.User.Id && p.IsActive, ct);
-        return new MeResponse(context.User.ToDto(), context.Player.ToDto(context.TodayLog.IsCleared), program.ToDto(context.Today));
+        return new MeResponse(context.User.ToDto(), context.Player.ToDto(context.TodayLog.IsCleared), program.ToDto(context.Today), context.ActiveQuests.Count == 0);
     }
 }

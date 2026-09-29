@@ -12,7 +12,25 @@ namespace SoloLeveling.Api.Services;
 /// <param name="TodayLog">今日紀錄，<see cref="DailyLog.Progresses"/> 已載入。</param>
 /// <param name="ActiveQuests">未封存任務，依 SortOrder 排序。</param>
 /// <param name="Today">使用者時區的今日。</param>
-public sealed record TodayContext(User User, Player Player, DailyLog TodayLog, List<Quest> ActiveQuests, DateOnly Today);
+/// <param name="DoneDaysBeforeToday">每個漸進任務在今天之前的達標天數；一般任務不在字典內。</param>
+public sealed record TodayContext(
+    User User,
+    Player Player,
+    DailyLog TodayLog,
+    List<Quest> ActiveQuests,
+    DateOnly Today,
+    IReadOnlyDictionary<Guid, int> DoneDaysBeforeToday)
+{
+    /// <summary>
+    /// 某任務在今天之前的達標天數；不在字典內（一般任務或新任務）回 0。
+    /// </summary>
+    /// <param name="questId">任務 ID。</param>
+    /// <returns>達標天數。</returns>
+    public int DoneDaysOf(Guid questId)
+    {
+        return DoneDaysBeforeToday.TryGetValue(questId, out var days) ? days : 0;
+    }
+}
 
 /// <summary>
 /// 先結算、再把今日需要的實體一次載入。必須在呼叫端開啟的交易內使用，結算會沿用該交易。
@@ -22,7 +40,7 @@ public sealed record TodayContext(User User, Player Player, DailyLog TodayLog, L
 public class TodayContextLoader(AppDbContext db, SettlementService settlement)
 {
     /// <summary>
-    /// 結算並載入今日內容。
+    /// 結算並載入今日內容。漸進任務的達標天數一次批次查出，不逐任務查。
     /// </summary>
     /// <param name="userId">使用者 ID。</param>
     /// <param name="ct">取消權杖。</param>
@@ -38,6 +56,17 @@ public class TodayContextLoader(AppDbContext db, SettlementService settlement)
             .Where(q => q.UserId == userId && !q.IsArchived)
             .OrderBy(q => q.SortOrder)
             .ToListAsync(ct);
-        return new TodayContext(user, player, settled.TodayLog, activeQuests, settled.Today);
+
+        var progressionIds = activeQuests.Where(q => q.GoalId != null).Select(q => q.Id).ToList();
+        var doneDays = progressionIds.Count == 0
+            ? new Dictionary<Guid, int>()
+            : await db.QuestProgresses
+                .Join(db.DailyLogs, p => p.DailyLogId, l => l.Id, (p, l) => new { p.QuestId, p.IsDone, l.Date })
+                .Where(x => x.IsDone && x.Date < settled.Today && progressionIds.Contains(x.QuestId))
+                .GroupBy(x => x.QuestId)
+                .Select(g => new { QuestId = g.Key, Days = g.Count() })
+                .ToDictionaryAsync(x => x.QuestId, x => x.Days, ct);
+
+        return new TodayContext(user, player, settled.TodayLog, activeQuests, settled.Today, doneDays);
     }
 }

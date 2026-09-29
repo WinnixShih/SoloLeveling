@@ -26,6 +26,7 @@ public record TodayResponse(DateOnly Date, decimal CompletionRatio, bool IsClear
 /// <param name="IsDone">今日是否完成。</param>
 /// <param name="XpReward">完成可得 EXP。</param>
 /// <param name="StatReward">完成可得屬性點。</param>
+/// <param name="Progression">漸進任務的階段資訊；一般任務為 null。</param>
 public record TodayQuestDto(
     Guid Id,
     string Name,
@@ -39,7 +40,15 @@ public record TodayQuestDto(
     decimal? Value,
     bool IsDone,
     int XpReward,
-    int StatReward);
+    int StatReward,
+    ProgressionDto? Progression);
+
+/// <summary>漸進任務的階段資訊；一般任務為 null。</summary>
+/// <param name="GoalId">所屬目標。</param>
+/// <param name="Stage">目前階段（從 1 起）。</param>
+/// <param name="StageCount">總階數。</param>
+/// <param name="TargetLabel">今日目標的顯示文字。</param>
+public record ProgressionDto(Guid GoalId, int Stage, int StageCount, string TargetLabel);
 
 /// <summary>寫入進度請求。</summary>
 /// <param name="Value">新值；null 表示清空（Limit 類型的「未填」）。</param>

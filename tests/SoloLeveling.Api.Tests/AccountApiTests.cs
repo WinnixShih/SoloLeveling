@@ -133,7 +133,7 @@ public sealed class AccountApiTests(PostgresFixture fixture) : IDisposable
     }
 
     [Fact]
-    public async Task Register_自動建立9個預設任務()
+    public async Task Register_經ApiFactory帶入基本任務_有9個任務()
     {
         var client = await _factory.RegisterAsync();
 
