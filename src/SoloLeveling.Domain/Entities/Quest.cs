@@ -43,4 +43,25 @@ public class Quest
 
     /// <summary>建立時間（UTC）。</summary>
     public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>所屬的引導式目標；null 表示一般任務，以下漸進欄位全為 null。</summary>
+    public Guid? GoalId { get; set; }
+
+    /// <summary>漸進目標值的種類。</summary>
+    public ProgressionValueKind? ValueKind { get; set; }
+
+    /// <summary>漸進起點（使用者的現況）。時間類為距中午的分鐘數。</summary>
+    public decimal? StartValue { get; set; }
+
+    /// <summary>漸進終點（使用者的目標）。</summary>
+    public decimal? EndValue { get; set; }
+
+    /// <summary>每升一階的變化量，帶正負號。</summary>
+    public decimal? StepValue { get; set; }
+
+    /// <summary>總階數；達到最後一階後目標固定為 <see cref="EndValue"/>。</summary>
+    public int? StageCount { get; set; }
+
+    /// <summary>升一階需要累積的達標天數（不需連續）。</summary>
+    public int? DaysPerStep { get; set; }
 }

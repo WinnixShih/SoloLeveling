@@ -28,4 +28,7 @@ public class QuestProgress
 
     /// <summary>建立時間（UTC）。</summary>
     public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>寫入進度當下用來判定的目標值（漸進任務為當階目標，一般任務為 TargetValue）；歷史查詢用。</summary>
+    public decimal? TargetSnapshot { get; set; }
 }

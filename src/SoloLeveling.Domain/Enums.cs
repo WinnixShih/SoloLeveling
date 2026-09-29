@@ -71,3 +71,33 @@ public enum XpSource
     /// <summary>困難模式未達標懲罰。</summary>
     Penalty = 5,
 }
+
+/// <summary>
+/// 引導式目標的類別；每個類別有自己的問題與漸進公式（見 <c>GoalCategories</c>）。
+/// </summary>
+public enum GoalCategory
+{
+    /// <summary>作息：就寢與起床時間。</summary>
+    Routine = 1,
+
+    /// <summary>運動：每天分鐘數。</summary>
+    Exercise = 2,
+
+    /// <summary>閱讀：每天分鐘數。</summary>
+    Reading = 3,
+
+    /// <summary>螢幕時間：每天小時上限。</summary>
+    ScreenTime = 4,
+}
+
+/// <summary>
+/// 漸進任務的目標值種類，決定顯示與四捨五入方式。
+/// </summary>
+public enum ProgressionValueKind
+{
+    /// <summary>一般數字（分鐘、小時等）。</summary>
+    Number = 1,
+
+    /// <summary>一天中的時間點，存成距中午 12:00 的分鐘數（見 <c>TimeOfDay</c>）。</summary>
+    TimeOfDay = 2,
+}
