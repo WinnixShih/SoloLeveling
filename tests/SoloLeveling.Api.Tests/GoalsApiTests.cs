@@ -101,11 +101,11 @@ public sealed class GoalsApiTests(PostgresFixture fixture) : IDisposable
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var goals = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("goals");
         goals.GetArrayLength().Should().Be(2);
-        // 兩個目標在同一次請求內建立、CreatedAt 相同，Goal.Id 是隨機 Guid 沒有次要排序鍵，
-        // 回傳順序不保證等於建立順序（與本專案既有的 XpEvent 同時間戳排序限制同一類問題），故依 category 找而非用索引
-        var routine = goals.EnumerateArray().Single(g => g.GetProperty("category").GetString() == "Routine");
-        routine.GetProperty("quests")[0].GetProperty("stage").GetInt32().Should().Be(1);
-        routine.GetProperty("quests")[0].GetProperty("stageCount").GetInt32().Should().Be(10);
+        // 兩個目標在同一次請求內建立、CreatedAt 相同；GoalService.BuildListAsync 以任務的最小 SortOrder 當次要排序鍵還原建立順序
+        goals[0].GetProperty("category").GetString().Should().Be("Routine");
+        goals[0].GetProperty("quests")[0].GetProperty("stage").GetInt32().Should().Be(1);
+        goals[0].GetProperty("quests")[0].GetProperty("stageCount").GetInt32().Should().Be(10);
+        goals[1].GetProperty("category").GetString().Should().Be("Reading");
 
         var today = await client.GetFromJsonAsync<JsonElement>("/api/v1/today");
         var names = today.GetProperty("quests").EnumerateArray().Select(q => q.GetProperty("name").GetString()).ToList();
@@ -117,6 +117,19 @@ public sealed class GoalsApiTests(PostgresFixture fixture) : IDisposable
 
         var me = await client.GetFromJsonAsync<JsonElement>("/api/v1/me");
         me.GetProperty("needsOnboarding").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetGoals_同一請求建立多個目標_依建立順序排序()
+    {
+        var client = await _factory.RegisterAsync(seedBasicQuests: false);
+        await client.PostAsJsonAsync("/api/v1/goals", new { goals = new[] { RoutineGoal(), ReadingGoal() }, basicQuestIndexes = Array.Empty<int>() });
+
+        var goals = (await client.GetFromJsonAsync<JsonElement>("/api/v1/goals")).GetProperty("goals");
+
+        goals.GetArrayLength().Should().Be(2);
+        goals[0].GetProperty("category").GetString().Should().Be("Routine");
+        goals[1].GetProperty("category").GetString().Should().Be("Reading");
     }
 
     [Fact]

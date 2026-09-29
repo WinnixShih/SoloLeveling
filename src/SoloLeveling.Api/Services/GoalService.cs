@@ -140,7 +140,7 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, TimeProvide
     }
 
     /// <summary>
-    /// GET /goals：進行中的目標與各任務的當前階段。
+    /// GET /goals：進行中的目標與各任務的當前階段，依建立順序排序（見 <see cref="BuildListAsync"/>）。
     /// </summary>
     /// <param name="userId">使用者 ID。</param>
     /// <param name="ct">取消權杖。</param>
@@ -253,14 +253,25 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, TimeProvide
             stepLabel);
     }
 
+    /// <summary>
+    /// 組出目標清單；排序依 <see cref="Goal.CreatedAt"/>，同一請求內建立、時間戳相同的目標再依其任務最小 <see cref="Quest.SortOrder"/> 排序（任務建立時依請求順序嚴格遞增），還原建立順序。
+    /// </summary>
+    /// <param name="userId">使用者 ID。</param>
+    /// <param name="context">今日內容，提供各任務的達標天數。</param>
+    /// <param name="ct">取消權杖。</param>
+    /// <returns>目標清單。</returns>
     private async Task<GoalsResponse> BuildListAsync(Guid userId, TodayContext context, CancellationToken ct)
     {
-        var goals = await db.Goals.Where(g => g.UserId == userId && !g.IsArchived).OrderBy(g => g.CreatedAt).ToListAsync(ct);
+        var goals = await db.Goals.Where(g => g.UserId == userId && !g.IsArchived).ToListAsync(ct);
         var goalIds = goals.Select(g => g.Id).ToHashSet();
         var quests = await db.Quests.Where(q => q.GoalId != null && goalIds.Contains(q.GoalId.Value)).OrderBy(q => q.SortOrder).ToListAsync(ct);
         var byGoal = quests.ToLookup(q => q.GoalId!.Value);
+        var orderedGoals = goals
+            .OrderBy(g => g.CreatedAt)
+            .ThenBy(g => byGoal[g.Id].Any() ? byGoal[g.Id].Min(q => q.SortOrder) : int.MaxValue)
+            .ToList();
 
-        return new GoalsResponse(goals.Select(g => new GoalDto(
+        return new GoalsResponse(orderedGoals.Select(g => new GoalDto(
             g.Id,
             g.Category,
             GoalCategories.Get(g.Category).Title,
