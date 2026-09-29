@@ -163,7 +163,7 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 | `Routine` | 作息 | 現在就寢時間、目標就寢時間、現在起床時間、目標起床時間、天數 | `{target} 前上床睡覺`（Check）、`{target} 前起床`（Check） | VIT／Normal、VIT／Hard | 0、1 |
 | `Exercise` | 運動 | 現在分鐘、目標分鐘、天數 | `運動`（Count，單位分鐘，Step 5） | STR／Normal | 7 |
 | `Reading` | 閱讀 | 現在分鐘、目標分鐘、天數 | `閱讀`（Count，單位分鐘，Step 5） | INT／Normal | 3 |
-| `ScreenTime` | 螢幕時間 | 現在小時、目標小時、天數 | `手機螢幕時間`（Limit，單位小時，Step 0.25） | WIL／Hard | 5 |
+| `ScreenTime` | 螢幕時間 | 現在小時、目標小時、天數 | `手機螢幕時間`（Limit，單位小時，Step 0.5） | WIL／Hard | 5 |
 
 天數 `lengthDays` 介於 7 到 90；時間格式 `HH:MM`（00:00 到 23:59）；目標必須比現況「更好」（就寢與起床目標不晚於現況；運動、閱讀、螢幕時間目標分別更多、更多、更少），允許相等。
 
@@ -178,6 +178,7 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 建立時：
 - `StageCount = ceil(lengthDays / DaysPerStep)`，至少 1。
 - `StepValue = (EndValue - StartValue) / StageCount`，按類別的 granularity 四捨五入：時間 5 分鐘、分鐘 1、小時 0.25。四捨五入後為 0 但起終點不同時，取一個 granularity 的量並帶正確符號。
+- 注意：表中「Step」指前端 UI 增減量（`Quest.Step`），與 `StepValue` 計算時的 granularity 不同。Granularity 是 `StepValue` 四捨五入的精度，UI Step 是使用者在前端勾選時的增減單位；運動、閱讀 UI Step 為 5 分鐘，螢幕時間 UI Step 為 0.5 小時。
 
 每天的計算：
 - `doneDays` = 該任務在**今天之前**所有 `QuestProgress.IsDone == true` 的天數，由 `TodayContextLoader` 一次批次載入所有漸進任務的 `DoneDaysBeforeToday`。
