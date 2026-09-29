@@ -169,7 +169,7 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 
 **時間編碼**
 
-時間點存為「距中午 12:00 的分鐘數」，0 到 1439。例：01:00 是 780、07:00 是 1140、23:30 是 690。顯示時轉換回 `HH:MM`：`((minutes / 60) + 12) % 24`。
+時間點存為「距基準時刻的分鐘數」，0 到 1439。就寢時間以中午 12:00 為基準：例 01:00 是 780、23:30 是 690。起床時間以 18:00 為基準（涵蓋 18:00 到隔天 17:59，早起即數值變小，避免中午後的起床時間被誤判成比現況差）：例 07:00 是 780、12:30 是 1110。顯示時轉換回 `HH:MM`：`((minutes / 60) + baseHour) % 24`，`baseHour` 就寢為 12、起床為 18。
 
 **階段公式**
 
@@ -206,7 +206,7 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 | Player | UserId（PK，FK User）；Level int ≥ 1；Xp int ≥ 0；Str/Vit/Int/Wil/Spi int ≥ 0；HardMode bool；Streak int；BestStreak int；TotalCompleted int；LastSettledDate DateOnly nullable |
 | Program | Id；UserId（FK）；StartDate DateOnly；Cycle int；LengthDays int = 66；IsActive bool；每使用者同時只有一筆 IsActive = true（partial unique index） |
 | Goal | Id；UserId（FK）；Category enum（`Routine`／`Exercise`／`Reading`／`ScreenTime`）；Answers text（JSON）；LengthDays int；StartDate DateOnly；IsArchived bool；ArchivedAt bigint nullable；CreatedAt bigint |
-| Quest | Id；UserId（FK）；GoalId Guid nullable（FK Goal，漸進任務才有值）；Name（≤ 60）；StatType enum；Difficulty enum；QuestType enum；TargetValue decimal(10,2) nullable；Step decimal(10,2) nullable；Unit（≤ 10）nullable；ValueKind enum nullable（`Number`／`TimeOfDay`，漸進任務才有值）；StartValue decimal(10,2) nullable；EndValue decimal(10,2) nullable；StepValue decimal(10,2) nullable；StageCount int nullable；DaysPerStep int nullable；SortOrder int；IsArchived bool；ArchivedAt bigint nullable |
+| Quest | Id；UserId（FK）；GoalId Guid nullable（FK Goal，漸進任務才有值）；Name（≤ 60）；StatType enum；Difficulty enum；QuestType enum；TargetValue decimal(10,2) nullable；Step decimal(10,2) nullable；Unit（≤ 10）nullable；ValueKind enum nullable（`Number`／`TimeOfDay`／`TimeOfDayEvening`，漸進任務才有值；`TimeOfDayEvening` 供起床時間使用，編碼基準為 18:00）；StartValue decimal(10,2) nullable；EndValue decimal(10,2) nullable；StepValue decimal(10,2) nullable；StageCount int nullable；DaysPerStep int nullable；SortOrder int；IsArchived bool；ArchivedAt bigint nullable |
 | DailyLog | Id；UserId（FK）；Date DateOnly；unique(UserId, Date)；CompletionRatio decimal(5,4)；IsCleared bool；BonusGranted bool；Note text nullable；IsSettled bool；SettledAt bigint nullable |
 | QuestProgress | Id；DailyLogId（FK）；QuestId（FK）；unique(DailyLogId, QuestId)；Value decimal(10,2) nullable；IsDone bool；XpGranted int；StatGranted int；TargetSnapshot decimal(10,2) nullable |
 | XpEvent | Id；UserId（FK）；Amount int（可負）；Source enum {Quest, QuestUndo, DailyBonus, DailyBonusUndo, Penalty}；RefId Guid nullable；OccurredAt bigint |
@@ -223,10 +223,10 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 | POST /auth/login | 登入 | `{email, password}` | 200 `{token, user}`；失敗 401 |
 | GET /me | 玩家總覽 | — | `{user:{id, email, displayName, timeZoneId}, player:{level, xp, xpNeeded, rank, title, stats:{str,vit,int,wil,spi}, hardMode, displayStreak, bestStreak, totalCompleted}, program:{startDate, cycle, dayNumber, lengthDays, isCompleted}, needsOnboarding}` |
 | PATCH /me | 更新設定 | `{displayName?, timeZoneId?, hardMode?}` | 200 同 GET /me；hardMode 變更觸發 4.5 |
-| GET /goals/categories | 目標類別定義 | — | 類別表與基本任務清單，前端畫表單用 |
+| GET /goals/categories | 目標類別定義 | — | 類別表與基本任務清單，前端畫表單用；`questions[].type` 為 `Time`／`Integer`／`Decimal` |
 | POST /goals/preview | 預覽目標產生的任務 | `{goals:[{category, answers}], basicQuestIndexes?}` | 不寫入，回每個目標的任務與階段摘要 |
 | POST /goals | 建立目標與任務 | `{goals:[{category, answers}], basicQuestIndexes?}` | 201；回 `GET /goals` 格式，其他欄位或同類別已有進行中的回 400/409 |
-| GET /goals | 目標清單 | — | `{goals:[{id, category, title, lengthDays, startDate, quests:[{id, name, stage, stageCount, isArchived}]}]}` |
+| GET /goals | 目標清單 | — | `{goals:[{id, category, title, lengthDays, startDate, quests:[{id, name, stage, stageCount, targetLabel, isArchived}]}]}` |
 | DELETE /goals/{id} | 封存目標與其任務 | — | 204；重算今日達標率 |
 | GET /quests | 任務清單 | — | `[{id, name, statType, difficulty, questType, targetValue, step, unit, sortOrder, goalId?}]`，不含已封存 |
 | POST /quests | 新增 | `{name, statType, difficulty, questType, targetValue?, step?, unit?}` | 201 任務；Count/Limit 缺 targetValue 回 400 |
@@ -278,7 +278,7 @@ Settle(userId, now):
 2. 引導（新帳號）：三步流程，(1) 勾選要建立的目標類別（至少一個、多個且同類別最多一個）；(2) 逐類別填表，表單依 GET /goals/categories 產生，`time` 用 `<input type="time">`；(3) 預覽呼叫 POST /goals/preview，顯示每個任務的起終點、階數、每階變化，下方列基本任務勾選清單（被取代的預設不勾且停用）。確認呼叫 POST /goals 後進入今日畫面。
 3. 今日：漸進任務名字含當天 EffectiveTarget，右側小字「第 1／10 階」；其他不變。
 4. 進度：66 格日曆（GET /history 自 program.startDate 起 66 天），五維屬性數值，最近 7 天各任務完成點。
-5. 設定：困難模式開關、任務新增／編輯；新增「目標」區塊列未封存目標（含類別、開始日、各任務階段），每個目標有「封存」（二次確認）；「新增目標」按鈕進只做一個類別的引導流程（類別選單排除已有進行中的）；編輯漸進任務時鎖住相關欄位；開新 66 天。
+5. 設定：困難模式開關、任務新增／編輯（漸進任務不在一般任務清單中，目標區塊只提供封存）；新增「目標」區塊列未封存目標（含類別、開始日、各任務階段），每個目標有「封存」（二次確認）；「新增目標」按鈕進只做一個類別的引導流程（類別選單排除已有進行中的）；開新 66 天。
 
 ## 9. 測試要求（最少）
 
