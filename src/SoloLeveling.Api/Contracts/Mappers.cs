@@ -22,7 +22,7 @@ public static class Mappers
     /// <returns>DTO。</returns>
     public static QuestDto ToDto(this Quest quest)
     {
-        return new QuestDto(quest.Id, quest.Name, quest.StatType, quest.Difficulty, quest.QuestType, quest.TargetValue, quest.Step, quest.Unit, quest.SortOrder);
+        return new QuestDto(quest.Id, quest.Name, quest.StatType, quest.Difficulty, quest.QuestType, quest.TargetValue, quest.Step, quest.Unit, quest.SortOrder, quest.GoalId);
     }
 
     /// <summary>玩家狀態；displayStreak 依今日是否達標即時加 1。</summary>

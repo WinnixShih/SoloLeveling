@@ -63,21 +63,41 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, TimeProvid
 
     /// <summary>
     /// PUT /quests/{id}：修改任務；改任務類型時清除該任務今日進度並撤銷已發獎勵（規格 4.9）。
+    /// 漸進任務（<see cref="Progression.IsProgression"/>）的目標由公式決定，只開放修改屬性與難度，其餘欄位不同一律回 400。
     /// </summary>
     /// <param name="userId">使用者 ID。</param>
     /// <param name="questId">任務 ID。</param>
     /// <param name="request">任務內容。</param>
     /// <param name="ct">取消權杖。</param>
     /// <returns>更新後的任務。</returns>
-    /// <exception cref="ApiErrorException">任務不存在或不屬於此使用者（404）。</exception>
+    /// <exception cref="ApiErrorException">任務不存在或不屬於此使用者（404）；漸進任務嘗試修改名稱、任務類型、目標值、增減量或單位（400，錯誤碼 <c>ProgressionQuestLocked</c>）。</exception>
     public async Task<QuestDto> UpdateAsync(Guid userId, Guid questId, QuestRequest request, CancellationToken ct)
     {
-        Validate(request);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var context = await loader.LoadAsync(userId, ct);
         var quest = FindActive(context, questId);
         var now = clock.GetUtcNow();
 
+        if (Progression.IsProgression(quest))
+        {
+            var unchanged = request.Name.Trim() == quest.Name
+                && request.QuestType == quest.QuestType
+                && request.TargetValue == quest.TargetValue
+                && request.Step == quest.Step
+                && request.Unit?.Trim() == quest.Unit;
+            if (!unchanged)
+            {
+                throw ApiErrorException.BadRequest("ProgressionQuestLocked", "漸進任務只能修改屬性與難度；要改目標請封存目標後重新建立");
+            }
+
+            quest.StatType = request.StatType;
+            quest.Difficulty = request.Difficulty;
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return quest.ToDto();
+        }
+
+        Validate(request);
         if (quest.QuestType != request.QuestType)
         {
             db.XpEvents.AddRange(ProgressUpdater.ClearQuestProgress(context.Player, context.TodayLog, context.ActiveQuests, quest, now));

@@ -89,15 +89,16 @@ public record QuestRequest(string Name, StatType StatType, Difficulty Difficulty
 
 /// <summary>任務。</summary>
 /// <param name="Id">任務 ID。</param>
-/// <param name="Name">名稱。</param>
+/// <param name="Name">名稱；漸進的時間類任務為含 <c>{target}</c> 的樣板，今日 API 才會渲染。</param>
 /// <param name="StatType">屬性代碼。</param>
 /// <param name="Difficulty">難度。</param>
 /// <param name="QuestType">任務類型。</param>
-/// <param name="TargetValue">目標值。</param>
+/// <param name="TargetValue">目標值；漸進任務為 null。</param>
 /// <param name="Step">增減量。</param>
 /// <param name="Unit">單位。</param>
 /// <param name="SortOrder">顯示順序。</param>
-public record QuestDto(Guid Id, string Name, StatType StatType, Difficulty Difficulty, QuestType QuestType, decimal? TargetValue, decimal? Step, string? Unit, int SortOrder);
+/// <param name="GoalId">所屬目標；一般任務為 null。</param>
+public record QuestDto(Guid Id, string Name, StatType StatType, Difficulty Difficulty, QuestType QuestType, decimal? TargetValue, decimal? Step, string? Unit, int SortOrder, Guid? GoalId);
 
 /// <summary>任務排序請求。</summary>
 /// <param name="QuestIds">依新順序排列的全部未封存任務 ID。</param>
