@@ -152,7 +152,7 @@
         <div class="card">
           ${qs.map((q) => `
             <div class="quest ${q.isDone ? 'done' : ''}">
-              <div class="name">${h(q.name)}<span class="sub">${h(q.difficulty)} · +${q.xpReward} EXP · +${q.statReward} ${s}</span></div>
+              <div class="name">${h(q.name)}${q.progression ? `<span class="stage">第 ${q.progression.stage}／${q.progression.stageCount} 階</span>` : ''}<span class="sub">${h(q.difficulty)} · +${q.xpReward} EXP · +${q.statReward} ${s}</span></div>
               <div class="ctl">${questControl(q)}</div>
             </div>`).join('')}
         </div>`).join('')}
@@ -191,6 +191,108 @@
         toast(err.message);
       }
     });
+  }
+
+  /* ---------- onboarding ---------- */
+  const CATEGORY_HINT = {
+    Routine: '早睡早起，每 3 天提早幾分鐘',
+    Exercise: '每天運動的分鐘數逐步增加',
+    Reading: '每天閱讀的分鐘數逐步增加',
+    ScreenTime: '每天手機使用上限逐步降低',
+  };
+
+  function questionInput(q) {
+    if (q.type === 'Time') return `<input type="time" name="${q.key}" required>`;
+    const step = q.type === 'Integer' ? 1 : 0.25;
+    return `<input type="number" name="${q.key}" required min="${num(q.min)}" max="${num(q.max)}" step="${step}" value="${num(q.default)}">`;
+  }
+
+  // single=true 時只做一個類別（設定頁「新增目標」），不顯示基本任務；excluded 為已有進行中的類別
+  async function renderOnboarding({ single, excluded = [] }) {
+    renderHeader();
+    const defs = await api('GET', '/goals/categories');
+    const categories = defs.categories.filter((c) => !excluded.includes(c.category));
+    let step = 1;
+    let chosen = [];
+    const answers = {};
+
+    const renderStep1 = () => {
+      $view.innerHTML = `
+        <div class="card">
+          <h2>${single ? '新增目標' : '先設定你的目標'}</h2>
+          <p class="sub">選擇想改善的項目，系統會依你的現況安排每天的任務，並逐步逼近目標。</p>
+          <div class="choices">${categories.map((c) => `
+            <label class="choice"><input type="${single ? 'radio' : 'checkbox'}" name="cat" value="${c.category}"><div><b>${h(c.title)}</b><div class="sub">${h(CATEGORY_HINT[c.category] ?? '')}</div></div></label>`).join('')}</div>
+          <div class="actions"><button id="next" class="small primary">下一步</button></div>
+        </div>`;
+      $view.querySelector('#next').addEventListener('click', () => {
+        chosen = [...$view.querySelectorAll('input[name=cat]:checked')].map((el) => categories.find((c) => c.category === el.value));
+        if (!chosen.length) { toast('至少選一個目標'); return; }
+        step = 2;
+        renderStep2();
+      });
+    };
+
+    const renderStep2 = () => {
+      $view.innerHTML = `
+        <div class="card">
+          <h2>回答幾個問題</h2>
+          <form id="qa">${chosen.map((c) => `
+            <div class="section-title">${h(c.title)}</div>
+            ${c.questions.map((q) => `<label class="field">${h(q.label)}${questionInput(q).replace('name="', `name="${c.category}.`)}</label>`).join('')}`).join('')}
+            <div class="actions"><button type="button" class="small back">上一步</button><button type="submit" class="small primary">預覽計畫</button></div>
+          </form>
+        </div>`;
+      $view.querySelector('.back').addEventListener('click', () => { step = 1; renderStep1(); });
+      $view.querySelector('#qa').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        chosen.forEach((c) => {
+          answers[c.category] = Object.fromEntries(c.questions.map((q) => [q.key, form[`${c.category}.${q.key}`].value]));
+        });
+        try {
+          const preview = await api('POST', '/goals/preview', { goals: goalsBody(), basicQuestIndexes: [] });
+          step = 3;
+          renderStep3(preview, defs.basicQuests);
+        } catch (err) {
+          toast(err.message);
+        }
+      });
+    };
+
+    const goalsBody = () => chosen.map((c) => ({ category: c.category, answers: answers[c.category] }));
+
+    const renderStep3 = (preview, basics) => {
+      const replaced = new Set(chosen.flatMap((c) => c.replacesBasicQuestIndexes));
+      $view.innerHTML = `
+        <div class="card">
+          <h2>你的計畫</h2>
+          ${preview.goals.map((g) => `
+            <div class="section-title">${h(g.title)}</div>
+            ${g.quests.map((q) => `
+              <div class="quest"><div class="name">${h(q.name)}<span class="sub">${h(q.startLabel)} → ${h(q.endLabel)}，共 ${q.stageCount} 階，每 ${q.daysPerStep} 天達標就${h(q.stepLabel)}</span></div></div>`).join('')}`).join('')}
+        </div>
+        ${single ? '' : `
+        <div class="card">
+          <h2>基本任務</h2>
+          <p class="sub">也可以一併加入這些日常任務，被目標取代的已排除。</p>
+          ${basics.map((b) => `<label class="choice"><input type="checkbox" name="basic" value="${b.index}" ${replaced.has(b.index) ? 'disabled' : 'checked'}><div>${h(b.name)}<span class="badge">${b.statType}</span></div></label>`).join('')}
+        </div>`}
+        <div class="actions"><button class="small back">上一步</button><button id="confirm" class="small primary">開始</button></div>`;
+      $view.querySelector('.back').addEventListener('click', () => { step = 2; renderStep2(); });
+      $view.querySelector('#confirm').addEventListener('click', async () => {
+        const basicQuestIndexes = single ? [] : [...$view.querySelectorAll('input[name=basic]:checked')].map((el) => Number(el.value));
+        try {
+          await api('POST', '/goals', { goals: goalsBody(), basicQuestIndexes });
+          toast('計畫已建立', true);
+          if (single) { await renderSettings(); } else { location.hash = '#today'; }
+        } catch (err) {
+          toast(err.message);
+        }
+      });
+    };
+
+    renderStep1();
   }
 
   /* ---------- progress ---------- */
@@ -264,15 +366,28 @@
 
   async function renderSettings() {
     renderHeader();
-    const quests = await api('GET', '/quests');
+    const [quests, goalsRes] = await Promise.all([api('GET', '/quests'), api('GET', '/goals')]);
+    const goals = goalsRes.goals;
+    const activeCategories = goals.map((g) => g.category);
     const { player, user, program } = state.me;
     $view.innerHTML = `
       <div class="card">
         <label class="switch"><span>困難模式<span class="sub" style="display:block;color:var(--muted);font-size:12px">門檻 100%，漏一天扣 EXP</span></span><input id="hard" type="checkbox" ${player.hardMode ? 'checked' : ''}></label>
       </div>
       <div class="card">
+        <h2>目標</h2>
+        ${goals.length ? goals.map((g) => `
+          <div class="goal" data-id="${g.id}">
+            <div class="name"><b>${h(g.title)}</b><span class="sub">自 ${h(g.startDate)} 起，${g.lengthDays} 天</span>
+              ${g.quests.map((q) => `<div class="sub">${q.isArchived ? '（已封存）' : ''}${h(q.name)} · 第 ${q.stage}／${q.stageCount} 階</div>`).join('')}
+            </div>
+            <button class="small danger archive-goal">封存</button>
+          </div>`).join('') : '<div class="sub">還沒有目標</div>'}
+        <div class="actions"><button id="add-goal" class="small primary">＋ 新增目標</button></div>
+      </div>
+      <div class="card">
         <h2>任務</h2>
-        <div id="quest-list">${quests.map((q) => `
+        <div id="quest-list">${quests.filter((q) => !q.goalId).map((q) => `
           <div class="qrow" data-id="${q.id}">
             <div class="name">${h(q.name)}<span class="badge">${q.statType}</span><span class="badge">${h(q.difficulty)}</span><span class="badge">${QUEST_TYPES[q.questType]}</span></div>
             <button class="small edit">編輯</button>
@@ -363,6 +478,8 @@
       });
     };
     $view.querySelectorAll('.qrow .archive').forEach((b) => armConfirm(b, '封存', () => api('DELETE', `/quests/${b.closest('.qrow').dataset.id}`)));
+    $view.querySelectorAll('.goal .archive-goal').forEach((b) => armConfirm(b, '封存', () => api('DELETE', `/goals/${b.closest('.goal').dataset.id}`)));
+    $view.querySelector('#add-goal').addEventListener('click', () => renderOnboarding({ single: true, excluded: activeCategories }));
     armConfirm($view.querySelector('#restart'), '開新 66 天', () => api('POST', '/program/restart'));
     $view.querySelector('#logout').addEventListener('click', logout);
   }
@@ -378,11 +495,21 @@
       location.hash = '#today';
       return;
     }
-    $nav.classList.remove('hidden');
-    $nav.querySelectorAll('a').forEach((a) => a.classList.toggle('active', a.dataset.route === hash));
     window.scrollTo(0, 0);
     try {
       await loadToday();
+      // 沒有任何任務就強制走引導；引導完成前不開放其他頁
+      if (state.me.needsOnboarding && hash !== 'onboarding') {
+        location.hash = '#onboarding';
+        return;
+      }
+      if (hash === 'onboarding') {
+        $nav.classList.add('hidden');
+        await renderOnboarding({ single: false });
+        return;
+      }
+      $nav.classList.remove('hidden');
+      $nav.querySelectorAll('a').forEach((a) => a.classList.toggle('active', a.dataset.route === hash));
       if (hash === 'progress') await renderProgress();
       else if (hash === 'settings') await renderSettings();
       else renderToday();

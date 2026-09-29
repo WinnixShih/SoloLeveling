@@ -184,3 +184,10 @@ label.field > input, label.field > select, label.field > textarea { margin-top: 
   z-index: 10;
 }
 .toast.ok { background: #12301f; border-color: var(--ok); color: #c8f5e2; }
+
+/* ---- onboarding / goals ---- */
+.choices { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.choice input { margin-top: 3px; }
+.stage { display: inline-block; margin-left: 6px; font-size: 11px; color: var(--accent); }
+.goal { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
