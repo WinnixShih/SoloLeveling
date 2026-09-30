@@ -173,11 +173,15 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 
 **階段公式**
 
-每個漸進任務有：`StartValue`（現況）、`EndValue`（終點）、`StepValue`（每階變化）、`StageCount`（總階）、`DaysPerStep`（每階天數，第一版固定 3）。
+每個漸進任務有：`StartValue`（現況）、`EndValue`（終點）、`StepValue`（每階變化）、`StageCount`（總階）、`DaysPerStep`（每階天數，每階至少 3 天）。
 
-建立時：
-- `StageCount = ceil(lengthDays / DaysPerStep)`，至少 1。
-- `StepValue = (EndValue - StartValue) / StageCount`，按類別的 granularity 四捨五入：時間 5 分鐘、分鐘 1、小時 0.25。四捨五入後為 0 但起終點不同時，取一個 granularity 的量並帶正確符號。
+建立時（`diff = |EndValue - StartValue|`，`granularity` 為類別的四捨五入單位）：
+- `diff == 0`：`StageCount = 1`、`DaysPerStep = 3`、`StepValue = 0`。
+- 否則：
+  - `maxStages = ceil(diff / granularity)`：刻度允許的最多階數，刻度不夠細時用來限制階數上限。
+  - `StageCount = max(1, min(ceil(lengthDays / 3), maxStages))`。
+  - `DaysPerStep = max(3, ceil(lengthDays / StageCount))`：刻度不夠細、階數因此減少時，每階天數同步拉長。
+  - `StepValue = (EndValue - StartValue) / StageCount`，按 granularity 四捨五入：時間 5 分鐘、分鐘 1、小時 0.25。四捨五入後為 0 但起終點不同時，取一個 granularity 的量並帶正確符號。
 - 注意：表中「Step」指前端 UI 增減量（`Quest.Step`），與 `StepValue` 計算時的 granularity 不同。Granularity 是 `StepValue` 四捨五入的精度，UI Step 是使用者在前端勾選時的增減單位；運動、閱讀 UI Step 為 5 分鐘，螢幕時間 UI Step 為 0.5 小時。
 
 每天的計算：

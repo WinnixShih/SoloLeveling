@@ -14,7 +14,7 @@
 
 ## 假設
 
-- 每階天數第一版固定 3 天，但存在任務欄位裡，之後開放調整不改模型。
+- 每階天數下限為 3 天，實際值由公式依差距與刻度算出（見「3. 漸進參數與階段公式」），存在任務欄位裡，之後開放調整不改模型。
 - 原本的 9 個預設任務改為引導最後一步的「基本任務」勾選清單。
 - 只有一個使用者（作者本人），不需要考慮舊資料搬移，但既有帳號的行為要維持。
 - `docs/SPEC.md` §12 規定未列功能不得新增，本功能實作時要同步更新 SPEC。
@@ -56,11 +56,15 @@ Domain 提供 `TimeOfDay.Parse("01:00") → 780` 與 `TimeOfDay.Format(780) → 
 | `EndValue` | `decimal?` | 終點值 |
 | `StepValue` | `decimal?` | 每階變化量，有正負 |
 | `StageCount` | `int?` | 總階數 |
-| `DaysPerStep` | `int?` | 每階需要的達標天數，第一版固定 3 |
+| `DaysPerStep` | `int?` | 每階需要的達標天數，下限 3、依差距與刻度算出 |
 
-**建立時的公式**：
-- `StageCount = ceil(lengthDays / DaysPerStep)`，至少 1。
-- `StepValue = (EndValue - StartValue) / StageCount`，依 `Granularity` 四捨五入：`TimeOfDay` 為 5 分鐘、分鐘類為 1、小時類為 0.25。四捨五入後為 0 但起終點不同時，取一個 granularity 的量並帶正確符號。
+**建立時的公式**（`diff = |EndValue - StartValue|`，`granularity` 為類別的四捨五入單位）：
+- `diff == 0`：`StageCount = 1`、`DaysPerStep = 3`、`StepValue = 0`。
+- 否則：
+  - `maxStages = ceil(diff / granularity)`：刻度允許的最多階數。
+  - `StageCount = max(1, min(ceil(lengthDays / 3), maxStages))`：刻度不夠細時減少階數。
+  - `DaysPerStep = max(3, ceil(lengthDays / StageCount))`：階數減少時拉長每階天數，補回總天數。
+  - `StepValue = (EndValue - StartValue) / StageCount`，依 `Granularity` 四捨五入：`TimeOfDay` 為 5 分鐘、分鐘類為 1、小時類為 0.25。四捨五入後為 0 但起終點不同時，取一個 granularity 的量並帶正確符號。
 
 **每天的計算**：
 - `doneDays` = 這個任務在**今天之前**所有 `QuestProgress.IsDone == true` 的天數。

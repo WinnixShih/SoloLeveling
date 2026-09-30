@@ -8,7 +8,7 @@ namespace SoloLeveling.Domain.Rules;
 /// </summary>
 public static class Progression
 {
-    /// <summary>每升一階需要的達標天數（第一版固定）。</summary>
+    /// <summary>每階天數下限；實際值由 <see cref="SoloLeveling.Domain.Goals.GoalCategoryDefinition.Schedule"/> 依差距與刻度算出。</summary>
     public const int DefaultDaysPerStep = 3;
 
     /// <summary>名稱樣板中被當階目標取代的佔位字串。</summary>

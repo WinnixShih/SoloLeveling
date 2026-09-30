@@ -77,7 +77,9 @@ public abstract class GoalCategoryDefinition
     }
 
     /// <summary>
-    /// 依起終點與天數算出藍圖的漸進參數。
+    /// 依起終點與天數算出藍圖的漸進參數。刻度（<paramref name="granularity"/>）相對差距太粗、
+    /// 無法撐起「每階固定 <see cref="Progression.DefaultDaysPerStep"/> 天」算出的階數時，
+    /// 改以刻度允許的最多階數為準，並拉長每階天數，避免出現多階四捨五入後 StepValue 為 0 的原地踏步階。
     /// </summary>
     /// <param name="start">起點。</param>
     /// <param name="end">終點。</param>
@@ -91,7 +93,10 @@ public abstract class GoalCategoryDefinition
             return (0, 1, Progression.DefaultDaysPerStep);
         }
 
-        var stageCount = Progression.StageCountFor(lengthDays, Progression.DefaultDaysPerStep);
-        return (Progression.StepFor(start, end, stageCount, granularity), stageCount, Progression.DefaultDaysPerStep);
+        var diff = Math.Abs(end - start);
+        var maxStages = (int)Math.Ceiling(diff / granularity);
+        var stageCount = Math.Max(1, Math.Min(Progression.StageCountFor(lengthDays, Progression.DefaultDaysPerStep), maxStages));
+        var daysPerStep = Math.Max(Progression.DefaultDaysPerStep, (int)Math.Ceiling((decimal)lengthDays / stageCount));
+        return (Progression.StepFor(start, end, stageCount, granularity), stageCount, daysPerStep);
     }
 }

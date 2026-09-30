@@ -129,6 +129,29 @@ public class GoalPlannerTests
         q.StepValue.Should().Be(-0.25m);
     }
 
+    [Fact]
+    public void Plan_螢幕時間_差距小天數長_減少階數拉長每階天數()
+    {
+        var answers = new Dictionary<string, string> { ["currentHours"] = "4", ["targetHours"] = "3", ["lengthDays"] = "50" };
+
+        var q = GoalPlanner.Plan(GoalCategory.ScreenTime, answers).Single();
+
+        q.StageCount.Should().Be(4);
+        q.DaysPerStep.Should().Be(13);
+        q.StepValue.Should().Be(-0.25m);
+    }
+
+    [Fact]
+    public void Plan_作息_就寢差距10分鐘_兩階各15天()
+    {
+        var quests = GoalPlanner.Plan(GoalCategory.Routine, Routine("01:00", "00:50", "08:00", "08:00"));
+
+        var bed = quests[0];
+        bed.StageCount.Should().Be(2);
+        bed.DaysPerStep.Should().Be(15);
+        bed.StepValue.Should().Be(-5);
+    }
+
     [Theory]
     [InlineData("6")]
     [InlineData("91")]
