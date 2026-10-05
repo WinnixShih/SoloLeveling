@@ -20,6 +20,9 @@ public sealed class ApiFactory(string connectionString, string environment = "De
 
     public FakeTimeProvider Clock { get; } = new(new DateTimeOffset(2026, 9, 28, 10, 0, 0, TimeSpan.Zero));
 
+    /// <summary>抽卡亂數；預設永遠抽該等級的第一張卡，測試可改 <see cref="FixedRandom.Value"/>。</summary>
+    public FixedRandom Rng { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(environment);
@@ -29,6 +32,8 @@ public sealed class ApiFactory(string connectionString, string environment = "De
         {
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
+            services.RemoveAll<Random>();
+            services.AddSingleton<Random>(Rng);
             // 排程結算不在測試 host 內背景執行，避免跟測試本身的結算互相干擾；排程邏輯另有專屬測試
             var scheduler = services.Single(d => d.ImplementationType == typeof(SettlementScheduler));
             services.Remove(scheduler);

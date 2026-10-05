@@ -27,6 +27,8 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 });
 
 builder.Services.AddSingleton(TimeProvider.System);
+// 抽卡亂數；Random.Shared 執行緒安全，測試以固定序列取代
+builder.Services.AddSingleton<Random>(Random.Shared);
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddScoped<SettlementService>();
 builder.Services.AddScoped<TodayContextLoader>();
@@ -39,6 +41,7 @@ builder.Services.AddScoped<TodayService>();
 builder.Services.AddScoped<HistoryService>();
 builder.Services.AddScoped<ProgramService>();
 builder.Services.AddScoped<GoalService>();
+builder.Services.AddScoped<RewardService>();
 builder.Services.AddHostedService<SettlementScheduler>();
 
 builder.Services
