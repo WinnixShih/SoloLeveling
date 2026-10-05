@@ -37,13 +37,22 @@
   }
 
   // 全螢幕遮罩要掛在 body：.win 有 backdrop-filter，會讓 position: fixed 以該元素而非視窗為基準
-  function overlay(html) {
+  // onClose 在遮罩被任何方式關閉（點背景或 el.close()）時呼叫一次
+  function overlay(html, onClose) {
     const el = document.createElement('div');
     el.className = 'hunter-modal';
     el.innerHTML = `<div class="hunter-modal-inner">${html}</div>`;
+    el.close = () => {
+      if (el.isConnected) {
+        el.remove();
+        if (onClose) {
+          onClose();
+        }
+      }
+    };
     el.addEventListener('click', (e) => {
       if (e.target === el) {
-        el.remove();
+        el.close();
       }
     });
     document.body.appendChild(el);
@@ -75,16 +84,13 @@
             <div class="flip-front">${cardFace(result.card, { large: true })}</div>
           </div></div>
           <p class="flip-flavor">${h(result.card.flavor)}</p>
-          <button type="button" class="btn btn-primary" id="flip-close">收下</button>`);
+          <button type="button" class="btn btn-primary" id="flip-close">收下</button>`, () => ctx.reload());
         requestAnimationFrame(() => el.querySelector('.flip').classList.add('flipped'));
         UI.sysMessage([
           `獲得 ${result.card.rarity} 級卡片「${result.card.name}」。`,
           result.isDuplicate ? `重複卡片已轉換。獲得 ${result.coins} 金幣。` : `新卡片已收入圖鑑。獲得 ${result.coins} 金幣。`,
         ]);
-        el.querySelector('#flip-close').addEventListener('click', async () => {
-          el.remove();
-          await ctx.reload();
-        });
+        el.querySelector('#flip-close').addEventListener('click', () => el.close());
       });
     } finally {
       // 失敗時還原按鈕；成功後由「收下」重新載入畫面
@@ -126,15 +132,28 @@
           <a class="btn btn-ghost" href="#settings">前往設定</a>
         </div>`,
     }));
-    el.querySelectorAll('[data-item]').forEach((b) => b.addEventListener('click', () => run(async () => {
-      const res = await ctx.api('POST', '/shop/purchase', { item: b.dataset.item });
-      UI.sysMessage([
-        b.dataset.item === 'Shield' ? `購買連勝保險卡。持有 ${res.shieldCount} 張。` : '購買 E 級寶箱，已放入待開寶箱。',
-        `剩餘金幣 ${res.coins}。`,
-      ]);
-      el.remove();
-      await ctx.reload();
-    })));
+    const itemButtons = el.querySelectorAll('[data-item]');
+    itemButtons.forEach((b) => b.addEventListener('click', async () => {
+      itemButtons.forEach((x) => { x.disabled = true; });
+      let purchased = false;
+      try {
+        await run(async () => {
+          const res = await ctx.api('POST', '/shop/purchase', { item: b.dataset.item });
+          purchased = true;
+          UI.sysMessage([
+            b.dataset.item === 'Shield' ? `購買連勝保險卡。持有 ${res.shieldCount} 張。` : '購買 E 級寶箱，已放入待開寶箱。',
+            `剩餘金幣 ${res.coins}。`,
+          ]);
+          el.remove();
+          await ctx.reload();
+        });
+      } finally {
+        // 購買失敗才還原；成功後整頁重畫
+        if (!purchased) {
+          itemButtons.forEach((x) => { x.disabled = false; });
+        }
+      }
+    }));
     el.querySelector('a[href="#settings"]').addEventListener('click', () => el.remove());
   }
 

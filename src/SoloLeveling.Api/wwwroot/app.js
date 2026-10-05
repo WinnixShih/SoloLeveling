@@ -510,6 +510,7 @@
           UI.sysMessage(['計畫已建立。', '系統將依計畫發布每日任務。']);
           if (single) {
             // 單一目標建立後直接重畫設定頁，不經 loadToday，獎勵在這裡顯示
+            state.me = await api('GET', '/me');
             announceRewards(drainRewards(), state.me);
             if (isCurrent()) {
               await renderSettings();

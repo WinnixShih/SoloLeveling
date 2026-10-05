@@ -138,4 +138,5 @@ curl -s -X PUT localhost:8080/api/v1/me/theme -H "Authorization: Bearer $TOKEN" 
 - Refresh token／登出即失效。
 - 註冊的 Email 唯一索引衝突改回 409。
 - 前端加離線暫存與 PWA。
+- GET /today、GET /me 每次讀取都套用獎勵判定（約 9 次查詢），之後可在無狀態變更時略過統計查詢。
 - 獎勵系統之後可能加：地下城、66 天 Boss、更多主題、稱號特效、以金幣兌換指定卡片。
