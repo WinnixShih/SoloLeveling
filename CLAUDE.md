@@ -42,6 +42,7 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 - **時間戳單位：** DB 是 `bigint` Unix 毫秒（`AppDbContext.ConfigureConventions` 的 value converter，全域套在 `DateTimeOffset`），API 出口是 Unix 秒（`Contracts/Mappers.ToUnixSeconds`）；只有這兩處可以換算。`DateOnly` 日期欄位（`StartDate`、`Date`、`LastSettledDate`）是 `date` 型別，API 用 `YYYY-MM-DD`。
 - **不硬刪 Quest／DailyLog。** 任務封存用 `IsArchived`＋`ArchivedAt`；已結算（`IsSettled`）的 DailyLog 不可再改。
 - **前端不計算 EXP／等級**，一律以 API 回傳值覆蓋畫面。
+- **前端色碼只能寫在 `app.css` 的 `tokens:start`～`tokens:end` 區塊**，其他地方用設計代號；主題以 `<html data-accent>` 切換。共用元件走 `ui.js` 的 `window.UI`，分頁加在 `app.js` 的 `NAV_ITEMS`，系統訊息的觸發統一由 `announce()` 比對。
 - **錯誤格式 `{ error: { code, message } }`：** Api 層丟 `ApiErrorException`（有 `BadRequest／Unauthorized／NotFound／Conflict` 工廠方法），Domain 層丟 `DomainValidationException`（對應 400），由 `ErrorHandlingMiddleware` 轉換。模型繫結失敗與 JWT 401 也在 `Program.cs` 轉成同一格式。其他例外交給框架回 500。
 - **enum 序列化：** `StatType` 在 JSON 是代碼 `STR/VIT/INT/WIL/SPI`（`StatTypeJsonConverter`，在 `Program.cs` 必須註冊在 `JsonStringEnumConverter` 之前）；其他 enum 是字串名稱；DB 內 enum 一律存字串（`HasConversion<string>()`）。
 - **任務的判定與顯示一律用 `Progression.EffectiveTarget`／`RenderName`，不直接讀 `Quest.TargetValue`／`Name`。** 漸進任務的階段不存 DB，由 `TodayContext.DoneDaysBeforeToday` 算出，該字典由 `TodayContextLoader` 一次批次載入（`SetValue` 時傳入 `doneDaysBeforeToday` 以計算目標）。
@@ -79,6 +80,6 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 
 ## 目前狀態
 
-- 引導式目標與漸進任務功能完成，測試全綠（191 個：Domain 127 + Api 64）。
+- 系統介面改版完成（純前端），測試全綠（207 個：Domain 142 + Api 65）。
 - GitHub 遠端 `origin` 是 `git@github.com:WinnixShih/SoloLeveling.git`，`main` 已 push 並追蹤 `origin/main`。
 - 待辦見 README「後續」：註冊 Email 唯一索引在極端併發下撞到會回 500（應改 409）、refresh token／登出即失效、前端離線暫存與 PWA 等。

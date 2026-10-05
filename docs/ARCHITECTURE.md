@@ -99,7 +99,7 @@ flowchart LR
 | `Errors/ErrorHandlingMiddleware.cs` | 把 `ApiErrorException`、`DomainValidationException` 轉成 `{ error: { code, message } }` |
 | `Auth/JwtTokenService.cs` | 簽發 JWT |
 | `Auth/CurrentUserExtensions.cs` | `User.GetUserId()` 取 `sub` claim |
-| `wwwroot/` | `index.html`、`app.js`、`app.css` |
+| `wwwroot/` | `index.html`、`app.css`、`ui.js`（共用元件）、`app.js`（路由與畫面） |
 
 ## 3. 請求生命週期：PUT /api/v1/today/quests/{id}/progress
 
@@ -178,12 +178,15 @@ flowchart LR
 
 ## 7. 前端
 
-- 位置：`src/SoloLeveling.Api/wwwroot`（`index.html`、`app.js`、`app.css`），由 `UseDefaultFiles`＋`UseStaticFiles` 提供。純 HTML＋JS，無建置步驟。
+- 位置：`src/SoloLeveling.Api/wwwroot`（`index.html`、`app.css`、`ui.js`、`app.js`），由 `UseDefaultFiles`＋`UseStaticFiles` 提供。純 HTML＋JS，無建置步驟；`index.html` 依序載入 `ui.js` 再 `app.js`。
+- **分工**：`ui.js` 以 `window.UI` 匯出共用元件（`h`、`win`、`statusPanel`、`sysMessage`、`toastError`、`confirmButton`、`setAccent`、`ApiError`），不呼叫 API、不處理路由；`app.js` 負責路由、API 呼叫與各畫面。
+- **樣式與主題**：色碼只能寫在 `app.css` 的 `tokens:start`～`tokens:end` 區塊，其他地方一律用設計代號；`<html data-accent="azure|violet|jade">` 切換三套色票，預設 `azure`（`UI.setAccent(key)`）。字體由 Google Fonts 載入（Noto Serif TC／Noto Sans TC／IBM Plex Mono／Chakra Petch），皆有系統後備字。
 - **快取**：`UseStaticFiles` 的 `OnPrepareResponse` 對所有靜態檔設 `Cache-Control: no-cache`，瀏覽器每次以 ETag 重新驗證（未變回 304），部署新版後不會拿到舊檔，因此不需要版本參數。
-- **路由**：hash 路由 `#login`、`#register`、`#today`、`#progress`、`#settings`，監聽 `hashchange`；無 token 時一律顯示登入／註冊。
+- **路由**：hash 路由 `#login`、`#register`、`#onboarding`、`#today`、`#progress`、`#settings`，監聽 `hashchange`；無 token 時一律顯示登入／註冊。底部導覽由 `app.js` 的 `NAV_ITEMS` 產生；導向用 `go(hash)`（hash 已相同時直接重跑路由）；快速連續切換時只有最後一次路由會寫入畫面。
 - **token**：存在 `localStorage` 的 `token`；API 回 401 時清除並導回 `#login`。
-- **資料流**：每次切換畫面先並行取 `GET /me` 與 `GET /today`；勾選或輸入進度時呼叫 `PUT /today/quests/{id}/progress`，以回應覆蓋今日資料，再重取 `/me` 更新等級與屬性。前端不計算 EXP、等級、達標率。
-- **錯誤顯示**：讀取回應的 `error.message` 以 toast 顯示。
+- **資料流**：每次切換畫面先並行取 `GET /me` 與 `GET /today`；勾選或輸入進度時呼叫 `PUT /today/quests/{id}/progress`，以回應覆蓋今日資料，再重取 `/me` 更新等級與屬性。同一時間只送一個進度請求，連點時忽略後續點擊。前端不計算 EXP、等級、達標率。
+- **系統訊息**：成功與事件通知走 `UI.sysMessage`（排隊、3.2 秒或點擊關閉）。`announce(prevMe, prevToday, me, today)` 比對前後狀態宣告任務完成、今日達標、升級、目標升階；上一次看到的等級與各漸進任務階段存在 `localStorage` 的 `seen:<userId>`，跨次開啟也能宣告升級與升階。
+- **錯誤顯示**：`api()` 把錯誤回應與網路失敗轉成 `UI.ApiError`，由 `showError` 以紅色 toast 顯示 `error.message`；其他例外照常往上丟。
 
 ## 8. 容器化
 
