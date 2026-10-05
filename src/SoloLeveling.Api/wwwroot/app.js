@@ -1,16 +1,23 @@
-/* SoloLeveling 第一階段前端：純 HTML + JS，hash 路由，所有數值都由 API 回傳，前端不自行計算 EXP／等級。 */
+/* SoloLeveling 前端：純 HTML + JS，hash 路由；共用元件在 ui.js（window.UI）。所有數值都由 API 回傳，前端不自行計算 EXP、等級與階段。 */
 (() => {
   const API = '/api/v1';
   const STAT_NAMES = { STR: '力量', VIT: '體力', INT: '智力', WIL: '意志', SPI: '精神' };
   const STAT_ORDER = ['STR', 'VIT', 'INT', 'WIL', 'SPI'];
   const DIFFICULTIES = ['Easy', 'Normal', 'Hard'];
   const QUEST_TYPES = { Check: '勾選', Count: '累計', Limit: '上限' };
+  // 底部導覽依此陣列產生；新增分頁時加一項並在 route() 補上對應分支
+  const NAV_ITEMS = [
+    { route: 'today', zh: '今日', en: 'TODAY' },
+    { route: 'progress', zh: '進度', en: 'STATS' },
+    { route: 'settings', zh: '設定', en: 'SYS' },
+  ];
 
   const $header = document.getElementById('header');
   const $view = document.getElementById('view');
   const $nav = document.getElementById('nav');
 
   const state = { token: localStorage.getItem('token'), me: null, today: null };
+  let routeSeq = 0;
 
   /* ---------- helpers ---------- */
   const { h } = UI;
@@ -20,7 +27,6 @@
     d.setUTCDate(d.getUTCDate() + n);
     return d.toISOString().slice(0, 10);
   };
-  const diffDays = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
 
   // 成功訊息走系統訊息，錯誤走紅色 toast
   function toast(msg, ok = false) {
@@ -31,17 +37,40 @@
     }
   }
 
+  // 只顯示 API 與網路錯誤；其他例外屬程式錯誤，照常往上丟
+  function showError(err) {
+    if (!(err instanceof UI.ApiError)) {
+      throw err;
+    }
+    UI.toastError(err.message);
+  }
+
   async function api(method, path, body) {
     const headers = { 'Content-Type': 'application/json' };
-    if (state.token) headers.Authorization = 'Bearer ' + state.token;
-    const res = await fetch(API + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    if (state.token) {
+      headers.Authorization = 'Bearer ' + state.token;
+    }
+    let res;
+    try {
+      res = await fetch(API + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    } catch (err) {
+      // fetch 只在網路層失敗（離線、連不到伺服器）時丟 TypeError
+      if (err instanceof TypeError) {
+        throw new UI.ApiError('無法連線到伺服器，請稍後再試', 0);
+      }
+      throw err;
+    }
     if (res.status === 401 && state.token) {
       logout();
-      throw new Error('登入已過期，請重新登入');
+      throw new UI.ApiError('登入已過期，請重新登入', 401);
     }
-    if (res.status === 204) return null;
+    if (res.status === 204) {
+      return null;
+    }
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error?.message || `請求失敗（${res.status}）`);
+    if (!res.ok) {
+      throw new UI.ApiError(data?.error?.message || `請求失敗（${res.status}）`, res.status);
+    }
     return data;
   }
 
@@ -53,30 +82,102 @@
     location.hash = '#login';
   }
 
-  /* ---------- header ---------- */
-  function renderHeader() {
-    const p = state.me?.player;
-    const t = state.today;
-    if (!p) {
+  /* ---------- shell ---------- */
+  function renderNav() {
+    $nav.innerHTML = NAV_ITEMS.map((item) => `<a href="#${item.route}" data-route="${item.route}"><b>${h(item.en)}</b>${h(item.zh)}</a>`).join('');
+  }
+
+  function setActiveNav(route) {
+    $nav.querySelectorAll('a').forEach((a) => {
+      if (a.dataset.route === route) {
+        a.setAttribute('aria-current', 'page');
+      } else {
+        a.removeAttribute('aria-current');
+      }
+    });
+  }
+
+  // 今日頁顯示完整狀態面板，其他頁顯示精簡版；未登入時隱藏
+  function renderHeader(compact = true) {
+    if (!state.me) {
       $header.classList.add('hidden');
+      $header.innerHTML = '';
       return;
     }
-    const pct = Math.min(100, Math.round((p.xp / p.xpNeeded) * 100));
-    const ratio = t ? Math.round(t.completionRatio * 100) : null;
+    $header.innerHTML = UI.statusPanel({ me: state.me, today: state.today, compact });
     $header.classList.remove('hidden');
-    $header.innerHTML = `
-      <div class="row">
-        <div><span class="level">Lv.${p.level}</span> <span class="rank">${h(p.rank)} 級</span> <span class="title">${h(p.title)}</span></div>
-        <div class="title">${h(state.me.user.displayName)}</div>
-      </div>
-      <div class="xpbar"><i style="width:${pct}%"></i></div>
-      <div class="meta">
-        <span>EXP <b>${p.xp}</b> / ${p.xpNeeded}</span>
-        <span>連續 <b>${p.displayStreak}</b> 天</span>
-        <span>最佳 <b>${p.bestStreak}</b></span>
-        ${ratio === null ? '' : `<span>今日 <b>${ratio}%</b>${t.isCleared ? ' ✓' : ''}</span>`}
-        ${p.hardMode ? '<span class="badge">困難模式</span>' : ''}
-      </div>`;
+  }
+
+  /**
+   * 比對前後兩次 /me 與 /today，依序送出系統訊息：任務完成、今日達標、升級、目標升階。
+   * 任務完成與達標只在兩份今日資料同一天、且前一份明確記錄為未完成（=== false）時宣告；
+   * prevMe、prevToday 為 null（第一次看到這個帳號）時不宣告。rewards 為獎勵結果，目前未使用。
+   */
+  function announce(prevMe, prevToday, me, today, rewards) {
+    if (prevToday && prevToday.date === today.date) {
+      const before = new Map(prevToday.quests.map((q) => [q.id, q]));
+      today.quests.forEach((q) => {
+        if (q.isDone && before.get(q.id)?.isDone === false) {
+          UI.sysMessage([`每日任務「${q.name}」完成。`, `獲得 ${q.xpReward} EXP、${q.statType} +${q.statReward}。`]);
+        }
+      });
+      if (prevToday.isCleared === false && today.isCleared) {
+        UI.sysMessage(['今日任務達成率已達門檻。', today.bonusGranted ? '今日達標，達標獎勵已發放。' : '今日達標。']);
+      }
+    }
+    if (prevMe && me.player.level > prevMe.player.level) {
+      UI.sysMessage([`等級提升。Lv.${prevMe.player.level} → Lv.${me.player.level}。`]);
+    }
+    if (prevToday) {
+      const stages = new Map(prevToday.quests.filter((q) => q.progression).map((q) => [q.id, q.progression.stage]));
+      today.quests.forEach((q) => {
+        const before = stages.get(q.id);
+        if (q.progression && before !== undefined && q.progression.stage > before) {
+          UI.sysMessage([`目標升階。「${q.name}」進入第 ${q.progression.stage}/${q.progression.stageCount} 階。`]);
+        }
+      });
+    }
+  }
+
+  const seenKey = (me) => `seen:${me.user.id}`;
+
+  // 讀回上次看到的等級與各漸進任務階段，轉成 announce 可比對的形狀；沒有紀錄或內容損毀時回傳 null
+  function readSeen(me) {
+    const raw = localStorage.getItem(seenKey(me));
+    if (raw === null) {
+      return null;
+    }
+    let seen;
+    try {
+      seen = JSON.parse(raw);
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        return null;
+      }
+      throw err;
+    }
+    if (!seen || typeof seen.level !== 'number' || typeof seen.stages !== 'object' || seen.stages === null) {
+      return null;
+    }
+    return {
+      me: { player: { level: seen.level } },
+      today: { quests: Object.entries(seen.stages).map(([id, stage]) => ({ id, progression: { stage } })) },
+    };
+  }
+
+  function writeSeen(me, today) {
+    const stages = Object.fromEntries(today.quests.filter((q) => q.progression).map((q) => [q.id, q.progression.stage]));
+    localStorage.setItem(seenKey(me), JSON.stringify({ level: me.player.level, stages }));
+  }
+
+  // 每次切換畫面都重取 /me 與 /today，並以上次看到的等級與階段宣告兩次開啟之間的升級與升階
+  async function loadToday() {
+    const [me, today] = await Promise.all([api('GET', '/me'), api('GET', '/today')]);
+    const seen = readSeen(me);
+    announce(seen ? seen.me : null, seen ? seen.today : null, me, today);
+    writeSeen(me, today);
+    state.me = me;
+    state.today = today;
   }
 
   /* ---------- auth ---------- */
@@ -84,46 +185,50 @@
     $header.classList.add('hidden');
     $nav.classList.add('hidden');
     const isRegister = mode === 'register';
+    const greet = isRegister
+      ? '偵測到新的玩家。<br>完成登錄後，系統將開始發布每日任務。'
+      : '歡迎回來，玩家。<br>請完成身分驗證。';
     $view.innerHTML = `
       <div class="auth">
-        <h1>SoloLeveling</h1>
-        <p>每天完成任務，累積經驗，升級自己。</p>
-        <div class="tabs">
-          <button data-mode="login" class="${isRegister ? '' : 'active'}">登入</button>
-          <button data-mode="register" class="${isRegister ? 'active' : ''}">註冊</button>
-        </div>
-        <form id="auth-form">
-          <label class="field">Email<input name="email" type="email" required autocomplete="email"></label>
-          <label class="field">密碼${isRegister ? '（至少 8 碼）' : ''}<input name="password" type="password" required minlength="${isRegister ? 8 : 1}" autocomplete="${isRegister ? 'new-password' : 'current-password'}"></label>
-          ${isRegister ? '<label class="field">顯示名稱<input name="displayName" type="text" required maxlength="40"></label>' : ''}
-          <button class="primary" type="submit" style="width:100%;margin-top:8px">${isRegister ? '建立帳號' : '登入'}</button>
-        </form>
+        ${UI.win({ title: '玩家登錄', body: `
+          <p class="auth-greet"><span class="auth-sys">[ SYSTEM ]</span>${greet}</p>
+          <div class="auth-tabs">
+            <button type="button" data-mode="login" class="btn ${isRegister ? 'btn-ghost' : 'btn-primary'}" aria-pressed="${!isRegister}">登入</button>
+            <button type="button" data-mode="register" class="btn ${isRegister ? 'btn-primary' : 'btn-ghost'}" aria-pressed="${isRegister}">註冊</button>
+          </div>
+          <form id="auth-form">
+            <label class="field">Email<input name="email" type="email" required autocomplete="email"></label>
+            <label class="field">密碼${isRegister ? '（至少 8 碼）' : ''}<input name="password" type="password" required minlength="${isRegister ? 8 : 1}" autocomplete="${isRegister ? 'new-password' : 'current-password'}"></label>
+            ${isRegister ? '<label class="field">顯示名稱<input name="displayName" type="text" required maxlength="40"></label>' : ''}
+            <button class="btn btn-primary btn-block" type="submit">${isRegister ? '建立帳號' : '登入'}</button>
+          </form>` })}
       </div>`;
-    $view.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => renderLogin(b.dataset.mode)));
-    $view.querySelector('#auth-form').addEventListener('submit', async (e) => {
+    $view.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => renderLogin(b.dataset.mode)));
+    const form = $view.querySelector('#auth-form');
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const f = new FormData(e.target);
+      const f = new FormData(form);
       const body = { email: f.get('email'), password: f.get('password') };
       if (isRegister) {
         body.displayName = f.get('displayName');
         body.timeZoneId = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Taipei';
       }
+      const submit = form.querySelector('button[type="submit"]');
+      submit.disabled = true;
       try {
         const res = await api('POST', isRegister ? '/auth/register' : '/auth/login', body);
         state.token = res.token;
         localStorage.setItem('token', res.token);
-        location.hash = '#today';
+        go('#today');
       } catch (err) {
-        toast(err.message);
+        showError(err);
+      } finally {
+        submit.disabled = false;
       }
     });
   }
 
   /* ---------- today ---------- */
-  async function loadToday() {
-    [state.me, state.today] = await Promise.all([api('GET', '/me'), api('GET', '/today')]);
-  }
-
   function questControl(q) {
     if (q.questType === 'Check') {
       return `<input class="check" type="checkbox" data-id="${q.id}" ${q.isDone ? 'checked' : ''}>`;
@@ -485,45 +590,75 @@
   }
 
   /* ---------- router ---------- */
+  // hash 已是目標時設定 location.hash 不會觸發 hashchange，改為直接重跑路由
+  function go(hash) {
+    if (location.hash === hash) {
+      route();
+    } else {
+      location.hash = hash;
+    }
+  }
+
   async function route() {
+    const seq = ++routeSeq;
+    // 快速連續切換時，只讓最後一次路由寫入畫面
+    const isCurrent = () => seq === routeSeq;
     const hash = (location.hash || '#today').slice(1);
     if (!state.token) {
       renderLogin(hash === 'register' ? 'register' : 'login');
       return;
     }
     if (hash === 'login' || hash === 'register') {
-      location.hash = '#today';
+      go('#today');
       return;
     }
     window.scrollTo(0, 0);
     try {
       await loadToday();
+      if (!isCurrent()) {
+        return;
+      }
       // 沒有任何任務就強制走引導；引導完成前不開放其他頁
       if (state.me.needsOnboarding && hash !== 'onboarding') {
-        location.hash = '#onboarding';
+        go('#onboarding');
         return;
       }
       // 已完成引導就不該再進引導頁（例如使用者手動改網址）
       if (!state.me.needsOnboarding && hash === 'onboarding') {
-        location.hash = '#today';
+        go('#today');
         return;
       }
       if (hash === 'onboarding') {
         $nav.classList.add('hidden');
         const { goals } = await api('GET', '/goals');
+        if (!isCurrent()) {
+          return;
+        }
         await renderOnboarding({ single: false, excluded: goals.map((g) => g.category) });
         return;
       }
+      const current = NAV_ITEMS.some((item) => item.route === hash) ? hash : 'today';
       $nav.classList.remove('hidden');
-      $nav.querySelectorAll('a').forEach((a) => a.classList.toggle('active', a.dataset.route === hash));
-      if (hash === 'progress') await renderProgress();
-      else if (hash === 'settings') await renderSettings();
-      else renderToday();
+      setActiveNav(current);
+      if (current === 'progress') {
+        await renderProgress(isCurrent);
+      } else if (current === 'settings') {
+        await renderSettings(isCurrent);
+      } else {
+        renderToday();
+      }
     } catch (err) {
-      if (state.token) toast(err.message);
+      if (!(err instanceof UI.ApiError)) {
+        throw err;
+      }
+      // 401 已在 api() 登出並導回登入頁，不再重複提示
+      if (state.token) {
+        UI.toastError(err.message);
+      }
     }
   }
 
+  renderNav();
   window.addEventListener('hashchange', route);
   route();
 })();

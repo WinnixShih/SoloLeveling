@@ -360,6 +360,54 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
   overflow-wrap: anywhere;
 }
 
+/* ---- 底部導覽 ---- */
+.nav {
+  position: fixed;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border-top: 1px solid var(--line-soft);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.nav a {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 2px;
+  min-height: var(--nav-h);
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+.nav a b { font: 600 10px var(--latin); letter-spacing: .2em; }
+.nav a[aria-current="page"] { color: var(--accent); }
+.nav a[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 28px;
+  height: 2px;
+  margin-left: -14px;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+/* ---- 登入 ---- */
+.auth { width: 100%; max-width: 400px; margin: 8vh auto 0; }
+.auth-greet { margin-bottom: 14px; color: var(--ink); font: 14px/1.8 var(--serif); }
+.auth-sys { display: block; color: var(--accent); font: 600 11px var(--latin); letter-spacing: .2em; }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+.auth form .btn-block { margin-top: 8px; }
+
 /* legacy:start 舊版畫面沿用的樣式；各畫面改版時刪除對應段落 */
 
 /* legacy: shared */
@@ -374,28 +422,6 @@ button.small:disabled, button.primary:disabled { opacity: .5; cursor: default; }
 .quest { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line-soft); }
 .quest:last-child { border-bottom: 0; }
 .quest .name { flex: 1; min-width: 0; }
-
-/* legacy: header */
-.header .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.header .level { color: var(--accent); font: 700 26px var(--latin); }
-.header .rank { color: var(--accent); font-weight: 600; }
-.header .title { color: var(--muted); font-size: 14px; }
-.header .meta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 6px; color: var(--muted); font-size: 14px; }
-.header .meta b { color: var(--ink); }
-.xpbar { height: 6px; margin-top: 8px; overflow: hidden; background: var(--line-soft); }
-.xpbar > i { display: block; height: 100%; background: var(--accent); }
-
-/* legacy: auth */
-.auth { width: 100%; max-width: 380px; margin: 24px auto; }
-.auth h1 { margin: 0 0 4px; font: 900 26px var(--serif); }
-.auth p { margin: 0 0 20px; color: var(--muted); }
-.auth .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
-.auth .tabs button { flex: 1; }
-
-/* legacy: nav */
-.nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; padding-bottom: var(--safe-bottom); background: var(--panel-solid); border-top: 1px solid var(--line-soft); }
-.nav a { flex: 1; padding: 14px 0; color: var(--muted); text-align: center; text-decoration: none; font-weight: 600; }
-.nav a.active { color: var(--accent); }
 
 /* legacy: today */
 .quest.done .name { color: var(--muted); text-decoration: line-through; }
