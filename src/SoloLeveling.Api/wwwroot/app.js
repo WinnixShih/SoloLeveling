@@ -9,12 +9,11 @@
   const $header = document.getElementById('header');
   const $view = document.getElementById('view');
   const $nav = document.getElementById('nav');
-  const $toast = document.getElementById('toast');
 
   const state = { token: localStorage.getItem('token'), me: null, today: null };
 
   /* ---------- helpers ---------- */
-  const h = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const { h } = UI;
   const num = (v) => (v === null || v === undefined ? '' : Number(v).toString());
   const addDays = (iso, n) => {
     const d = new Date(iso + 'T00:00:00Z');
@@ -23,12 +22,13 @@
   };
   const diffDays = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
 
-  let toastTimer;
+  // 成功訊息走系統訊息，錯誤走紅色 toast
   function toast(msg, ok = false) {
-    $toast.textContent = msg;
-    $toast.className = 'toast' + (ok ? ' ok' : '');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => $toast.classList.add('hidden'), 2600);
+    if (ok) {
+      UI.sysMessage([msg]);
+    } else {
+      UI.toastError(msg);
+    }
   }
 
   async function api(method, path, body) {

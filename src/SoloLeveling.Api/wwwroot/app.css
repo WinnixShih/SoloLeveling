@@ -271,6 +271,95 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
 .rarity-S { --rarity: var(--rarity-s); }
 .rarity-E, .rarity-C, .rarity-A, .rarity-S { color: var(--rarity); border-color: var(--rarity); }
 
+/* ---- 狀態面板 ---- */
+.status { display: grid; gap: 10px; }
+.status-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.lv { display: grid; place-items: center; flex: none; min-width: 60px; padding: 4px 6px; border: 1px solid var(--line); }
+.lv small { color: var(--muted); font: 600 10px var(--latin); letter-spacing: .2em; }
+.lv b { color: var(--accent); font: 700 26px/1 var(--latin); text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 50%, transparent); }
+.status:not(.compact) .lv { animation: lv-breathe 4s ease-in-out infinite; }
+@keyframes lv-breathe {
+  0%, 100% { box-shadow: 0 0 0 transparent; }
+  50% { box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent); }
+}
+.who { display: grid; gap: 2px; min-width: 0; }
+.who-name { font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.who-title { color: var(--muted); font-size: 12px; }
+.who-title em { color: var(--ink); font-family: var(--serif); font-style: normal; }
+.rank-badge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin-left: auto;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  box-shadow: inset 0 0 12px var(--line-soft);
+  font: 700 20px var(--latin);
+}
+.xp-bar { height: 6px; overflow: hidden; border-radius: 999px; background: var(--line-soft); }
+.xp-bar > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 55%, transparent), var(--accent));
+  box-shadow: 0 0 10px var(--accent);
+  transition: width .4s ease;
+}
+.bar-row { display: flex; justify-content: space-between; color: var(--muted); font: 11px var(--mono); font-variant-numeric: tabular-nums; }
+.status-bar { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.status.compact { padding: 8px 12px; }
+.status.compact .lv { min-width: 52px; padding: 2px 4px; }
+.status.compact .lv b { font-size: 20px; }
+.status.compact .rank-badge { width: 34px; height: 34px; font-size: 16px; }
+
+/* ---- 系統訊息 ---- */
+.sysmsg-host {
+  position: fixed;
+  z-index: 30;
+  top: calc(12px + var(--safe-top));
+  left: calc(var(--gutter) + var(--safe-left));
+  right: calc(var(--gutter) + var(--safe-right));
+  max-width: 480px;
+  margin: 0 auto;
+  pointer-events: none;
+}
+.sysmsg {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  background: var(--panel-solid);
+  border: 1px solid var(--accent);
+  box-shadow: var(--glow), 0 12px 30px var(--shadow);
+  color: var(--ink);
+  font: 14px/1.7 var(--serif);
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity .25s ease, transform .25s ease;
+}
+.sysmsg.show { opacity: 1; transform: none; }
+.sysmsg-head { color: var(--accent); font: 600 11px var(--latin); letter-spacing: .2em; }
+.sysmsg-line { overflow-wrap: anywhere; }
+
+/* ---- 錯誤 toast ---- */
+.toast {
+  position: fixed;
+  z-index: 31;
+  left: calc(var(--gutter) + var(--safe-left));
+  right: calc(var(--gutter) + var(--safe-right));
+  bottom: calc(var(--nav-h) + var(--safe-bottom) + 12px);
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--bad) 16%, var(--panel-solid));
+  border: 1px solid var(--bad);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--bad) 35%, transparent), 0 12px 30px var(--shadow);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
 /* legacy:start 舊版畫面沿用的樣式；各畫面改版時刪除對應段落 */
 
 /* legacy: shared */
@@ -307,10 +396,6 @@ button.small:disabled, button.primary:disabled { opacity: .5; cursor: default; }
 .nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; padding-bottom: var(--safe-bottom); background: var(--panel-solid); border-top: 1px solid var(--line-soft); }
 .nav a { flex: 1; padding: 14px 0; color: var(--muted); text-align: center; text-decoration: none; font-weight: 600; }
 .nav a.active { color: var(--accent); }
-
-/* legacy: toast */
-.toast { position: fixed; left: 50%; bottom: 84px; z-index: 10; max-width: 90vw; padding: 10px 14px; transform: translateX(-50%); background: var(--panel-solid); border: 1px solid var(--bad); color: var(--ink); }
-.toast.ok { border-color: var(--ok); }
 
 /* legacy: today */
 .quest.done .name { color: var(--muted); text-decoration: line-through; }
