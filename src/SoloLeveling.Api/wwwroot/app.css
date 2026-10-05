@@ -567,3 +567,25 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
 .quest-admin .chip { padding: 1px 6px; font-size: 11px; }
 .quest-editor:not(:empty) { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
 .account { overflow-wrap: anywhere; }
+
+/* ---- 寬螢幕：導覽格置中，不拉滿整列 ---- */
+@media (min-width: 720px) {
+  .nav { justify-content: center; grid-auto-columns: minmax(0, 160px); }
+}
+
+/* ---- 窄螢幕 ---- */
+@media (max-width: 360px) {
+  :root { --gutter: 12px; }
+  .win { padding: 10px 12px; }
+  .form-row { grid-template-columns: 1fr; }
+}
+
+/* ---- 減少動態：關閉光暈呼吸、日曆閃爍與訊息位移 ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .sysmsg { transform: none; }
+}
