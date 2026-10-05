@@ -229,71 +229,140 @@
   }
 
   /* ---------- today ---------- */
+  let progressBusy = false;
+
   function questControl(q) {
+    const name = h(q.name);
     if (q.questType === 'Check') {
-      return `<input class="check" type="checkbox" data-id="${q.id}" ${q.isDone ? 'checked' : ''}>`;
+      return `<button class="tick" type="button" data-act="toggle" data-id="${q.id}" aria-pressed="${q.isDone}" aria-label="完成 ${name}"><i aria-hidden="true">${q.isDone ? '✓' : ''}</i></button>`;
     }
     if (q.questType === 'Count') {
       return `
-        <button class="small" data-id="${q.id}" data-delta="-1">−</button>
-        <span class="value">${num(q.value ?? 0)} / ${num(q.targetValue)} ${h(q.unit ?? '')}</span>
-        <button class="small" data-id="${q.id}" data-delta="1">＋</button>`;
+        <span class="count">
+          <button class="step" type="button" data-act="step" data-delta="-1" data-id="${q.id}" aria-label="減少 ${name}">−</button>
+          <span class="count-value num">${num(q.value ?? 0)} / ${num(q.targetValue)}</span>
+          <button class="step" type="button" data-act="step" data-delta="1" data-id="${q.id}" aria-label="增加 ${name}">＋</button>
+        </span>`;
     }
-    return `<input class="inline" type="number" min="0" step="${num(q.step ?? 0.5)}" data-id="${q.id}" value="${num(q.value)}" placeholder="—"> <span class="sub">≤ ${num(q.targetValue)} ${h(q.unit ?? '')}</span>`;
+    return `
+      <span class="count">
+        <input class="limit-input num" type="number" inputmode="decimal" min="0" step="${num(q.step ?? 0.5)}" data-id="${q.id}" value="${num(q.value)}" placeholder="—" aria-label="${name} 今日數值">
+        <span class="count-value num">≤ ${num(q.targetValue)}</span>
+      </span>`;
+  }
+
+  function questRow(q) {
+    const stage = q.progression ? `<span class="stage">第 ${q.progression.stage}/${q.progression.stageCount} 階</span>` : '';
+    const unit = q.unit ? ` · ${h(q.unit)}` : '';
+    return `
+      <div class="quest-row ${q.isDone ? 'done' : ''}">
+        <div class="quest-main">
+          <div class="quest-name"><span>${h(q.name)}</span>${stage}</div>
+          <div class="quest-meta">${h(q.difficulty)} · +${q.xpReward} EXP · ${q.statType} +${q.statReward}${unit}</div>
+        </div>
+        <div class="quest-ctl">${questControl(q)}</div>
+      </div>`;
+  }
+
+  // 開著頁面跨過午夜時，前一份今日資料是昨天的；以「新的一天全部未完成」為比對基準，第一次勾選仍會宣告
+  function sameDayBase(prevToday, today) {
+    if (prevToday.date === today.date) {
+      return prevToday;
+    }
+    return { ...prevToday, date: today.date, isCleared: false, quests: prevToday.quests.map((q) => ({ ...q, isDone: false })) };
+  }
+
+  // 同一時間只送一個進度請求：連點時忽略後續點擊，避免以舊值計算造成累計少算或重複宣告
+  async function setProgress(id, value) {
+    if (progressBusy) {
+      return;
+    }
+    progressBusy = true;
+    $view.querySelector('#quest-list')?.classList.add('busy');
+    const prevMe = state.me;
+    const prevToday = state.today;
+    try {
+      const today = await api('PUT', `/today/quests/${id}/progress`, { value });
+      const me = await api('GET', '/me');
+      announce(prevMe, sameDayBase(prevToday, today), me, today);
+      writeSeen(me, today);
+      state.today = today;
+      state.me = me;
+    } catch (err) {
+      showError(err);
+    } finally {
+      progressBusy = false;
+    }
+    // 請求期間若已切到其他頁就不重繪，避免蓋掉新畫面
+    if ($view.querySelector('#quest-list')) {
+      renderToday();
+    }
   }
 
   function renderToday() {
-    renderHeader();
+    renderHeader(false);
     const t = state.today;
+    // 重繪前保留尚未儲存的反思草稿，勾選任務不會清掉正在輸入的內容
+    const draft = $view.querySelector('#note')?.value;
     const groups = STAT_ORDER.map((s) => [s, t.quests.filter((q) => q.statType === s)]).filter(([, qs]) => qs.length);
-    const ratio = Math.round(t.completionRatio * 100);
+    const list = groups.map(([s, qs]) => `
+      <div class="quest-group">
+        <div class="group-title"><span class="latin-label">${s}</span>${STAT_NAMES[s]}</div>
+        ${qs.map(questRow).join('')}
+      </div>`).join('');
     $view.innerHTML = `
-      <div class="card summary">
-        <div><div class="section-title" style="margin:0">今日 ${h(t.date)}</div><div>門檻 ${Math.round(t.threshold * 100)}%${t.bonusGranted ? '，已領達標獎勵 +30' : ''}</div></div>
-        <div class="ratio ${t.isCleared ? 'cleared' : ''}">${ratio}%</div>
-      </div>
-      ${groups.map(([s, qs]) => `
-        <div class="section-title">${STAT_NAMES[s]} · ${s}</div>
-        <div class="card">
-          ${qs.map((q) => `
-            <div class="quest ${q.isDone ? 'done' : ''}">
-              <div class="name">${h(q.name)}${q.progression ? `<span class="stage">第 ${q.progression.stage}／${q.progression.stageCount} 階</span>` : ''}<span class="sub">${h(q.difficulty)} · +${q.xpReward} EXP · +${q.statReward} ${s}</span></div>
-              <div class="ctl">${questControl(q)}</div>
-            </div>`).join('')}
-        </div>`).join('')}
-      <div class="card">
-        <h2>今日反思</h2>
-        <textarea id="note" rows="3" maxlength="2000" placeholder="寫點什麼…">${h(t.note ?? '')}</textarea>
-        <div class="actions"><button id="save-note" class="small">儲存</button></div>
-      </div>`;
+      ${UI.win({ title: '每日任務', body: `
+        <div class="ratio-row">
+          <div><span class="latin-label">TODAY</span> <span class="num">${h(t.date)}</span><span class="sub">門檻 ${Math.round(t.threshold * 100)}%${t.bonusGranted ? '，已領達標獎勵' : ''}</span></div>
+          <b class="ratio num ${t.isCleared ? 'cleared' : ''}">${Math.round(t.completionRatio * 100)}%</b>
+        </div>
+        <div id="quest-list" class="quest-list">${list || '<p class="sub">目前沒有任務，可到設定新增。</p>'}</div>` })}
+      ${UI.win({ title: '今日反思', body: `
+        <textarea id="note" rows="3" maxlength="2000" placeholder="寫點什麼…" aria-label="今日反思">${h(draft ?? t.note ?? '')}</textarea>
+        <div class="actions"><button id="save-note" class="btn btn-ghost" type="button">儲存</button></div>` })}`;
 
-    const questById = Object.fromEntries(t.quests.map((q) => [q.id, q]));
-    const setProgress = async (id, value) => {
-      try {
-        state.today = await api('PUT', `/today/quests/${id}/progress`, { value });
-        state.me = await api('GET', '/me');
-        renderToday();
-      } catch (err) {
-        toast(err.message);
-        renderToday();
+    const $list = $view.querySelector('#quest-list');
+    const questById = new Map(t.quests.map((q) => [q.id, q]));
+    $list.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-act]');
+      if (!btn) {
+        return;
       }
-    };
-    $view.querySelectorAll('input.check').forEach((el) => el.addEventListener('change', () => setProgress(el.dataset.id, el.checked ? 1 : 0)));
-    $view.querySelectorAll('button[data-delta]').forEach((el) => el.addEventListener('click', () => {
-      const q = questById[el.dataset.id];
-      const step = Number(q.step ?? 1);
-      const next = Math.max(0, Number(q.value ?? 0) + Number(el.dataset.delta) * step);
-      setProgress(q.id, Number(next.toFixed(2)));
-    }));
-    $view.querySelectorAll('input.inline').forEach((el) => el.addEventListener('change', () => {
-      setProgress(el.dataset.id, el.value === '' ? null : Number(el.value));
-    }));
-    $view.querySelector('#save-note').addEventListener('click', async () => {
+      const q = questById.get(btn.dataset.id);
+      if (btn.dataset.act === 'toggle') {
+        setProgress(q.id, q.isDone ? 0 : 1);
+        return;
+      }
+      const current = Number(q.value ?? 0);
+      const next = Number(Math.max(0, current + Number(btn.dataset.delta) * Number(q.step ?? 1)).toFixed(2));
+      if (next === current) {
+        return;
+      }
+      setProgress(q.id, next);
+    });
+    $list.addEventListener('change', (e) => {
+      const input = e.target.closest('input.limit-input');
+      if (!input) {
+        return;
+      }
+      const value = input.value === '' ? null : Number(input.value);
+      if (value !== null && !(value >= 0)) {
+        UI.toastError('請輸入 0 以上的數字');
+        renderToday();
+        return;
+      }
+      setProgress(input.dataset.id, value);
+    });
+    $view.querySelector('#save-note').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
       try {
         await api('PUT', '/today/note', { note: $view.querySelector('#note').value });
-        toast('已儲存', true);
+        UI.sysMessage(['今日反思已記錄。']);
       } catch (err) {
-        toast(err.message);
+        showError(err);
+      } finally {
+        btn.disabled = false;
       }
     });
   }

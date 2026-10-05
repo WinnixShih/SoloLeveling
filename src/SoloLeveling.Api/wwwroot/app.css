@@ -408,6 +408,64 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
 .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
 .auth form .btn-block { margin-top: 8px; }
 
+/* ---- 今日 ---- */
+.latin-label { color: var(--accent); font: 600 11px var(--latin); letter-spacing: .2em; }
+.ratio-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 6px; color: var(--muted); font-size: 13px; }
+.ratio-row .ratio { color: var(--ink); font-size: 24px; font-weight: 600; }
+.ratio-row .ratio.cleared { color: var(--ok); text-shadow: 0 0 12px color-mix(in srgb, var(--ok) 50%, transparent); }
+.quest-list.busy { opacity: .75; }
+.quest-group + .quest-group { margin-top: 6px; }
+.group-title { display: flex; align-items: center; gap: 8px; padding: 8px 2px 2px; color: var(--muted); font-size: 12px; }
+.quest-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px;
+  border-top: 1px dashed var(--line-soft);
+}
+.quest-main { min-width: 0; }
+.quest-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 14px; }
+.quest-name > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.quest-meta { color: var(--muted); font: 11px var(--mono); overflow-wrap: anywhere; }
+.stage { padding: 0 5px; border: 1px solid var(--line-soft); color: var(--accent); font: 10px var(--mono); white-space: nowrap; }
+.quest-row.done .quest-name > span:first-child {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+.quest-ctl { display: flex; align-items: center; }
+.tick, .step {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.tick { border: 0; }
+.tick i {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  color: var(--accent-ink);
+  font: 700 14px/1 var(--mono);
+  font-style: normal;
+}
+.quest-row.done .tick i {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.step { border: 1px solid var(--line-soft); font: 600 16px var(--mono); }
+.count { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.count-value { min-width: 44px; text-align: center; white-space: nowrap; }
+.limit-input { width: 76px; text-align: right; }
+
 /* legacy:start 舊版畫面沿用的樣式；各畫面改版時刪除對應段落 */
 
 /* legacy: shared */
@@ -422,17 +480,6 @@ button.small:disabled, button.primary:disabled { opacity: .5; cursor: default; }
 .quest { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line-soft); }
 .quest:last-child { border-bottom: 0; }
 .quest .name { flex: 1; min-width: 0; }
-
-/* legacy: today */
-.quest.done .name { color: var(--muted); text-decoration: line-through; }
-.quest .ctl { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-.quest .value { min-width: 64px; text-align: center; font-family: var(--mono); }
-.check { width: 22px; height: 22px; }
-.summary { display: flex; justify-content: space-between; align-items: center; }
-.summary .ratio { font: 700 22px var(--mono); }
-.summary .ratio.cleared { color: var(--ok); }
-input[type="number"].inline { width: 88px; text-align: right; }
-.stage { display: inline-block; margin-left: 6px; color: var(--accent); font-size: 11px; }
 
 /* legacy: progress */
 .grid66 { display: grid; grid-template-columns: repeat(11, 1fr); gap: 5px; }
