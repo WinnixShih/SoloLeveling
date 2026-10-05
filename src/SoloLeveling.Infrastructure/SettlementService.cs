@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using SoloLeveling.Domain;
+using SoloLeveling.Domain.Entities;
 using SoloLeveling.Domain.Rules;
 
 namespace SoloLeveling.Infrastructure;
@@ -43,6 +45,15 @@ public class SettlementService(AppDbContext db, TimeProvider clock)
 
             db.DailyLogs.AddRange(result.NewLogs);
             db.XpEvents.AddRange(result.Events);
+            // 保險卡可能由排程結算消耗，先記成未公告，下一次套用獎勵的請求再回報給前端
+            db.RewardEvents.AddRange(result.ShieldsUsed.Select(date => new RewardEvent
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Kind = RewardEventKind.ShieldUsed,
+                Date = date,
+                OccurredAt = now,
+            }));
             await db.SaveChangesAsync(ct);
 
             if (transaction is not null)

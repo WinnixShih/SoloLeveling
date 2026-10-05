@@ -14,12 +14,12 @@ public class SettlementServiceTests(PostgresFixture fixture)
     private static readonly DateOnly Today = new(2026, 9, 28);
     private static readonly DateOnly Yesterday = new(2026, 9, 27);
 
-    private async Task<Guid> SeedUserAsync(string timeZoneId, DateOnly? lastSettled, bool hardMode = false, int streak = 0, int level = 1, int xp = 0)
+    private async Task<Guid> SeedUserAsync(string timeZoneId, DateOnly? lastSettled, bool hardMode = false, int streak = 0, int level = 1, int xp = 0, int shieldCount = 0)
     {
         await using var db = fixture.CreateDbContext();
         var user = new User { Id = Guid.NewGuid(), Email = $"{Guid.NewGuid():N}@test.local", PasswordHash = "x", DisplayName = "t", TimeZoneId = timeZoneId, CreatedAt = Now.AddDays(-30) };
         db.Users.Add(user);
-        db.Players.Add(new Player { UserId = user.Id, LastSettledDate = lastSettled, HardMode = hardMode, Streak = streak, Level = level, Xp = xp, CreatedAt = user.CreatedAt });
+        db.Players.Add(new Player { UserId = user.Id, LastSettledDate = lastSettled, HardMode = hardMode, Streak = streak, Level = level, Xp = xp, ShieldCount = shieldCount, CreatedAt = user.CreatedAt });
         await db.SaveChangesAsync();
         return user.Id;
     }
@@ -136,5 +136,20 @@ public class SettlementServiceTests(PostgresFixture fixture)
         var log = await verify.DailyLogs.SingleAsync(l => l.UserId == userId && l.Date == Yesterday);
         log.CompletionRatio.Should().Be(0.5m);
         log.IsSettled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task 漏一天且有保險卡_寫入未公告的ShieldUsed事件()
+    {
+        var userId = await SeedUserAsync("UTC", lastSettled: Yesterday.AddDays(-1), streak: 3, shieldCount: 1);
+
+        await SettleAsync(userId, Now);
+
+        var player = await LoadPlayerAsync(userId);
+        player.Streak.Should().Be(4);
+        player.ShieldCount.Should().Be(0);
+        await using var db = fixture.CreateDbContext();
+        var events = await db.RewardEvents.Where(e => e.UserId == userId).ToListAsync();
+        events.Should().ContainSingle(e => e.Kind == RewardEventKind.ShieldUsed && e.Date == Yesterday && e.AnnouncedAt == null);
     }
 }

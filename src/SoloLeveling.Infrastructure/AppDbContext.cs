@@ -33,6 +33,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     /// <summary>EXP 流水。</summary>
     public DbSet<XpEvent> XpEvents => Set<XpEvent>();
 
+    /// <summary>寶箱。</summary>
+    public DbSet<RewardChest> RewardChests => Set<RewardChest>();
+
+    /// <summary>擁有的卡片。</summary>
+    public DbSet<OwnedCard> OwnedCards => Set<OwnedCard>();
+
+    /// <summary>已解鎖的成就。</summary>
+    public DbSet<Achievement> Achievements => Set<Achievement>();
+
+    /// <summary>已購買的主題。</summary>
+    public DbSet<OwnedTheme> OwnedThemes => Set<OwnedTheme>();
+
+    /// <summary>金幣流水。</summary>
+    public DbSet<CoinEvent> CoinEvents => Set<CoinEvent>();
+
+    /// <summary>需要通知使用者的獎勵事件。</summary>
+    public DbSet<RewardEvent> RewardEvents => Set<RewardEvent>();
+
     /// <summary>
     /// 設定實體對應：主鍵、唯一鍵、索引、欄位長度與精度，以及時間戳的 Unix 毫秒轉換。
     /// </summary>
@@ -55,6 +73,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             b.HasKey(x => x.UserId);
             b.HasOne<User>().WithOne().HasForeignKey<Player>(x => x.UserId);
+            b.Property(x => x.ThemeKey).HasMaxLength(16).IsRequired();
+            b.Property(x => x.TitlePrefixKey).HasMaxLength(32);
+            b.Property(x => x.TitleSuffixKey).HasMaxLength(32);
+            b.Property(x => x.PinnedCardId).HasMaxLength(64);
         });
 
         modelBuilder.Entity<Program>(b =>
@@ -120,6 +142,56 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             b.Property(x => x.Source).HasConversion<string>().HasMaxLength(16);
             b.Property(x => x.Seq).UseIdentityAlwaysColumn();
             b.HasIndex(x => new { x.UserId, x.OccurredAt });
+        });
+
+        modelBuilder.Entity<RewardChest>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId);
+            b.Property(x => x.Rarity).HasConversion<string>().HasMaxLength(16);
+            b.Property(x => x.Source).HasConversion<string>().HasMaxLength(16);
+            b.Property(x => x.DroppedCardId).HasMaxLength(64);
+            b.HasIndex(x => new { x.UserId, x.OpenedAt });
+        });
+
+        modelBuilder.Entity<OwnedCard>(b =>
+        {
+            // 同一使用者同一張卡只有一列
+            b.HasKey(x => new { x.UserId, x.CardId });
+            b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId);
+            b.Property(x => x.CardId).HasMaxLength(64);
+        });
+
+        modelBuilder.Entity<Achievement>(b =>
+        {
+            // 解鎖一次性
+            b.HasKey(x => new { x.UserId, x.Key });
+            b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId);
+            b.Property(x => x.Key).HasMaxLength(32);
+        });
+
+        modelBuilder.Entity<OwnedTheme>(b =>
+        {
+            b.HasKey(x => new { x.UserId, x.ThemeKey });
+            b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId);
+            b.Property(x => x.ThemeKey).HasMaxLength(16);
+        });
+
+        modelBuilder.Entity<CoinEvent>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId);
+            b.Property(x => x.Source).HasConversion<string>().HasMaxLength(16);
+            b.Property(x => x.Seq).UseIdentityAlwaysColumn();
+            b.HasIndex(x => new { x.UserId, x.OccurredAt });
+        });
+
+        modelBuilder.Entity<RewardEvent>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId);
+            b.Property(x => x.Kind).HasConversion<string>().HasMaxLength(16);
+            b.HasIndex(x => new { x.UserId, x.AnnouncedAt });
         });
     }
 
