@@ -25,7 +25,7 @@
 | 階級晉升（E→D…→S） | C | 前後 `Leveling.RankOf` 不同；另送 1 張保險卡 |
 | 最佳連續達 7 天 | C | `BestStreak` 首次跨過 7 |
 | 最佳連續達 30 天 | A | `BestStreak` 首次跨過 30 |
-| 目標完成 | A | 目標所有未封存任務都到最後一階，`Goal.CompletedAt` 由 null 變有值 |
+| 目標完成 | A | 目標所有未封存任務都到最後一階且目標期間（`LengthDays`）已走完，`Goal.CompletedAt` 由 null 變有值；本版之前建立、已符合條件的目標會在使用者下一次請求時補發 |
 | 66 天週期完成 | S | 開新週期時舊週期已滿 66 天，`Program.CompletedAt` 寫入 |
 | 金幣購買 | E | 200 金幣 |
 

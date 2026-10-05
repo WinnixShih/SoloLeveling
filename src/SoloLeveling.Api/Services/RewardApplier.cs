@@ -91,7 +91,7 @@ public class RewardApplier(AppDbContext db, RewardStatsLoader statsLoader, TimeP
         foreach (var goal in goals)
         {
             var quests = context.ActiveQuests.Where(q => q.GoalId == goal.Id).ToList();
-            if (GoalCompletion.IsFinished(quests, q => context.DoneDaysOf(q.Id) + (doneToday.Contains(q.Id) ? 1 : 0)))
+            if (GoalCompletion.IsFinished(goal, context.Today, quests, q => context.DoneDaysOf(q.Id) + (doneToday.Contains(q.Id) ? 1 : 0)))
             {
                 goal.CompletedAt = now;
                 completed += 1;

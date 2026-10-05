@@ -212,7 +212,7 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 | 階級晉升 | C，另送 1 張保險卡（上限 3） | 新等級與前一級的 `RankOf` 不同 |
 | 最佳連續達 7 天 | C | 成就「不屈」首次解鎖時 |
 | 最佳連續達 30 天 | A | 成就「恆心」首次解鎖時 |
-| 目標完成 | A | 目標每個未封存任務的達標天數（含今天）≥ `(StageCount − 1) × DaysPerStep + 1`；寫入 `Goal.CompletedAt` 後不再判定 |
+| 目標完成 | A | 目標每個未封存任務的達標天數（含今天）≥ `(StageCount − 1) × DaysPerStep + 1`，且目標期間（`LengthDays`）已走完（今天 − `StartDate` + 1 ≥ `LengthDays`）；本版之前建立、已符合條件的目標，會在使用者下一次請求時補發 A 箱；寫入 `Goal.CompletedAt` 後不再判定 |
 | 66 天週期完成 | S | `POST /program/restart` 時 `today − StartDate ≥ LengthDays`，寫入 `Program.CompletedAt` |
 | 金幣購買 | E | 200 金幣 |
 
@@ -289,7 +289,7 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 | PUT /me/pinned-card | 釘選卡 | `{cardId｜null}` | 200 同 GET /me；400 `CardNotOwned` |
 | PUT /me/theme | 切換主題 | `{themeKey}` | 200 同 GET /me；400 `ThemeNotOwned` |
 
-`GET /today`、`PUT /today/quests/{id}/progress`、`POST/PUT /quests`、`DELETE /quests/{id}`、`POST /goals`、`DELETE /goals/{id}`、`GET/PATCH /me`、`PUT /me/*`、`POST /program/restart` 的回應帶 `rewards`：`{levelsGained, rankUps, newChests, newAchievements, coinDelta, shieldsGained, shieldsUsed, shieldCount}`；`POST /rewards/chests/{id}/open` 與 `POST /shop/purchase` 的回應也帶；清單與 `GET /goals` 不帶此欄位。
+`GET /today`、`PUT /today/quests/{id}/progress`、`POST/PUT /quests`、`DELETE /quests/{id}`、`POST /goals`、`DELETE /goals/{id}`、`GET/PATCH /me`、`PUT /me/*`、`POST /program/restart`（`rewards` 在回應的 `program` 物件內）的回應帶 `rewards`：`{levelsGained, rankUps, newChests, newAchievements, coinDelta, shieldsGained, shieldsUsed, shieldCount}`；`POST /rewards/chests/{id}/open` 與 `POST /shop/purchase` 的回應也帶；清單與 `GET /goals` 不帶此欄位。
 
 ## 7. 結算演算法
 

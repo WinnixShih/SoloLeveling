@@ -233,6 +233,21 @@ public sealed class RewardsFlowApiTests(PostgresFixture fixture) : IDisposable
     }
 
     [Fact]
+    public async Task 起訖相同的目標第一天達標_期間未走完不發A箱()
+    {
+        var client = await _factory.RegisterAsync(seedBasicQuests: false);
+        var created = await CreateGoalAsync(client, new { category = "Reading", answers = new { currentMinutes = 30, targetMinutes = 30, lengthDays = 7 } });
+        var readingId = created.GetProperty("goals")[0].GetProperty("quests")[0].GetProperty("id").GetGuid();
+
+        var progress = await PutProgressAsync(client, readingId, 30);
+
+        Chests(progress).Should().NotContain("A:GoalCompleted");
+        await using var db = fixture.CreateDbContext();
+        var goalId = (await db.Quests.SingleAsync(q => q.Id == readingId)).GoalId!.Value;
+        (await db.Goals.SingleAsync(g => g.Id == goalId)).CompletedAt.Should().BeNull();
+    }
+
+    [Fact]
     public async Task 開新週期_舊週期滿66天_發S箱並解鎖破繭()
     {
         var client = await _factory.RegisterAsync();
