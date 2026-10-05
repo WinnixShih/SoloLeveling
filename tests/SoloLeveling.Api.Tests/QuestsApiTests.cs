@@ -67,7 +67,7 @@ public sealed class QuestsApiTests(PostgresFixture fixture) : IDisposable
 
         var response = await client.DeleteAsync($"/api/v1/quests/{id}");
 
-        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
         var after = await client.GetFromJsonAsync<JsonElement>("/api/v1/quests");
         after.GetArrayLength().Should().Be(8);
         after.EnumerateArray().Should().NotContain(q => q.GetProperty("id").GetGuid() == id);

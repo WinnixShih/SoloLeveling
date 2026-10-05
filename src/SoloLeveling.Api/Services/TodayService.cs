@@ -11,8 +11,9 @@ namespace SoloLeveling.Api.Services;
 /// </summary>
 /// <param name="db">DbContext。</param>
 /// <param name="loader">今日內容載入（含結算）。</param>
+/// <param name="rewardApplier">獎勵判定與持久化。</param>
 /// <param name="clock">時間來源。</param>
-public class TodayService(AppDbContext db, TodayContextLoader loader, TimeProvider clock)
+public class TodayService(AppDbContext db, TodayContextLoader loader, RewardApplier rewardApplier, TimeProvider clock)
 {
     /// <summary>反思筆記最長字數。</summary>
     public const int MaxNoteLength = 2000;
@@ -27,8 +28,10 @@ public class TodayService(AppDbContext db, TodayContextLoader loader, TimeProvid
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var context = await loader.LoadAsync(userId, ct);
+        // 結算可能消耗了保險卡，也可能補解鎖排程造成的成就，GET 也套用一次
+        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
         await tx.CommitAsync(ct);
-        return Build(context);
+        return Build(context) with { Rewards = rewards };
     }
 
     /// <summary>
@@ -53,8 +56,9 @@ public class TodayService(AppDbContext db, TodayContextLoader loader, TimeProvid
         db.QuestProgresses.AddRange(context.TodayLog.Progresses.Where(p => !existingProgressIds.Contains(p.Id)));
         db.XpEvents.AddRange(events);
         await db.SaveChangesAsync(ct);
+        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
         await tx.CommitAsync(ct);
-        return Build(context);
+        return Build(context) with { Rewards = rewards };
     }
 
     /// <summary>

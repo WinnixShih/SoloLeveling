@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using SoloLeveling.Domain;
 using SoloLeveling.Domain.Goals;
 
@@ -94,4 +95,7 @@ public record GoalDto(Guid Id, GoalCategory Category, string Title, int LengthDa
 
 /// <summary>GET /goals 與 POST /goals 的回應。</summary>
 /// <param name="Goals">進行中的目標。</param>
-public record GoalsResponse(List<GoalDto> Goals);
+/// <param name="Rewards">本次請求的獎勵；只有 POST /goals 帶，GET /goals 為 null 並從 JSON 省略。</param>
+public record GoalsResponse(
+    List<GoalDto> Goals,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RewardsDto? Rewards = null);

@@ -15,8 +15,9 @@ namespace SoloLeveling.Api.Services;
 /// </summary>
 /// <param name="db">DbContext。</param>
 /// <param name="loader">今日內容載入（含結算）。</param>
+/// <param name="rewardApplier">獎勵判定與持久化。</param>
 /// <param name="clock">時間來源。</param>
-public class GoalService(AppDbContext db, TodayContextLoader loader, TimeProvider clock)
+public class GoalService(AppDbContext db, TodayContextLoader loader, RewardApplier rewardApplier, TimeProvider clock)
 {
     /// <summary>
     /// GET /goals/categories：類別定義與基本任務清單。
@@ -134,9 +135,10 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, TimeProvide
 
         db.XpEvents.AddRange(ProgressUpdater.Recalculate(context.Player, context.TodayLog, context.ActiveQuests, now));
         await db.SaveChangesAsync(ct);
+        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
         var response = await BuildListAsync(userId, context, ct);
         await tx.CommitAsync(ct);
-        return response;
+        return response with { Rewards = rewards };
     }
 
     /// <summary>
@@ -160,9 +162,9 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, TimeProvide
     /// <param name="userId">使用者 ID。</param>
     /// <param name="goalId">目標 ID。</param>
     /// <param name="ct">取消權杖。</param>
-    /// <returns>非同步作業。</returns>
+    /// <returns>本次獎勵（封存可能讓今日達標）。</returns>
     /// <exception cref="ApiErrorException">目標不存在或已封存（404）。</exception>
-    public async Task ArchiveAsync(Guid userId, Guid goalId, CancellationToken ct)
+    public async Task<RewardsDto> ArchiveAsync(Guid userId, Guid goalId, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var context = await loader.LoadAsync(userId, ct);
@@ -181,7 +183,9 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, TimeProvide
 
         db.XpEvents.AddRange(ProgressUpdater.Recalculate(context.Player, context.TodayLog, context.ActiveQuests, now));
         await db.SaveChangesAsync(ct);
+        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
         await tx.CommitAsync(ct);
+        return rewards;
     }
 
     private sealed record GoalPlan(GoalCategoryDefinition Definition, IReadOnlyDictionary<string, string> Answers, int LengthDays, IReadOnlyList<GoalQuestBlueprint> Blueprints);

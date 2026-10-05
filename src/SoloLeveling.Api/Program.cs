@@ -30,6 +30,8 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddScoped<SettlementService>();
 builder.Services.AddScoped<TodayContextLoader>();
+builder.Services.AddScoped<RewardStatsLoader>();
+builder.Services.AddScoped<RewardApplier>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<PlayerService>();
 builder.Services.AddScoped<QuestService>();
