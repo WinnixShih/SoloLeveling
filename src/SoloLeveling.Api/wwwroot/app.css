@@ -464,7 +464,7 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
 .step { border: 1px solid var(--line-soft); font: 600 16px var(--mono); }
 .count { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .count-value { min-width: 44px; text-align: center; white-space: nowrap; }
-.limit-input { width: 76px; text-align: right; }
+input.limit-input { width: 76px; text-align: right; }
 
 /* ---- 進度 ---- */
 /* 每格至少 40px 好點，375px 寬時一列 7 天 */

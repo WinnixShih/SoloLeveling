@@ -274,18 +274,19 @@
     const prevToday = state.today;
     try {
       const today = await api('PUT', `/today/quests/${id}/progress`, { value });
+      // PUT 已生效，先更新今日資料；之後 GET /me 失敗也不會讓畫面停在過期狀態
+      state.today = today;
       const me = await api('GET', '/me');
       announce(prevMe, sameDayBase(prevToday, today), me, today);
       writeSeen(me, today);
-      state.today = today;
       state.me = me;
     } catch (err) {
       showError(err);
     } finally {
       progressBusy = false;
     }
-    // 請求期間若已切到其他頁就不重繪，避免蓋掉新畫面
-    if ($view.querySelector('#quest-list')) {
+    // 請求期間若已切到其他頁或被登出就不重繪，避免蓋掉新畫面
+    if (state.today && $view.querySelector('#quest-list')) {
       renderToday();
     }
   }
@@ -376,9 +377,12 @@
   }
 
   // single=true 時只做一個類別（設定頁「新增目標」），不顯示基本任務；excluded 為已有進行中的類別
-  async function renderOnboarding({ single, excluded = [] }) {
+  async function renderOnboarding({ single, excluded = [], isCurrent = () => true }) {
     renderHeader();
     const defs = await api('GET', '/goals/categories');
+    if (!isCurrent()) {
+      return;
+    }
     const categories = defs.categories.filter((c) => !excluded.includes(c.category));
     let chosen = [];
     const answers = {};
@@ -456,7 +460,9 @@
           await api('POST', '/goals', { goals: goalsBody(), basicQuestIndexes });
           UI.sysMessage(['計畫已建立。', '系統將依計畫發布每日任務。']);
           if (single) {
-            await renderSettings();
+            if (isCurrent()) {
+              await renderSettings();
+            }
           } else {
             go('#today');
           }
@@ -633,9 +639,13 @@
         <div class="actions"><button id="logout" type="button" class="btn btn-ghost">登出</button></div>` })}`;
 
     const $editor = $view.querySelector('#quest-editor');
+    // 非同步操作完成後，使用者可能已切到其他頁；只在仍停留設定頁時才重繪
+    const onSettings = () => location.hash === '#settings';
     const refresh = async () => {
       state.me = await api('GET', '/me');
-      await renderSettings();
+      if (onSettings()) {
+        await renderSettings();
+      }
     };
     const bindForm = (q) => {
       $editor.innerHTML = questForm(q);
@@ -710,7 +720,7 @@
       UI.sysMessage(['目標已封存。']);
       await refresh();
     }));
-    $view.querySelector('#add-goal').addEventListener('click', () => renderOnboarding({ single: true, excluded: activeCategories }));
+    $view.querySelector('#add-goal').addEventListener('click', () => renderOnboarding({ single: true, excluded: activeCategories, isCurrent: onSettings }));
     UI.confirmButton($view.querySelector('#restart'), '開新 66 天', async () => {
       await api('POST', '/program/restart');
       UI.sysMessage(['新的 66 天計畫已開始。']);

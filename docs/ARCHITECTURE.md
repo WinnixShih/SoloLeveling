@@ -185,7 +185,7 @@ flowchart LR
 - **路由**：hash 路由 `#login`、`#register`、`#onboarding`、`#today`、`#progress`、`#settings`，監聽 `hashchange`；無 token 時一律顯示登入／註冊。底部導覽由 `app.js` 的 `NAV_ITEMS` 產生；導向用 `go(hash)`（hash 已相同時直接重跑路由）；快速連續切換時只有最後一次路由會寫入畫面。
 - **token**：存在 `localStorage` 的 `token`；API 回 401 時清除並導回 `#login`。
 - **資料流**：每次切換畫面先並行取 `GET /me` 與 `GET /today`；勾選或輸入進度時呼叫 `PUT /today/quests/{id}/progress`，以回應覆蓋今日資料，再重取 `/me` 更新等級與屬性。同一時間只送一個進度請求，連點時忽略後續點擊。前端不計算 EXP、等級、達標率。
-- **系統訊息**：成功與事件通知走 `UI.sysMessage`（排隊、3.2 秒或點擊關閉）。`announce(prevMe, prevToday, me, today)` 比對前後狀態宣告任務完成、今日達標、升級、目標升階；上一次看到的等級與各漸進任務階段存在 `localStorage` 的 `seen:<userId>`，跨次開啟也能宣告升級與升階。
+- **系統訊息**：成功與事件通知走 `UI.sysMessage`（排隊、3.2 秒或點擊關閉）。`announce(prevMe, prevToday, me, today, rewards)` 比對前後狀態宣告任務完成、今日達標、升級、目標升階（`rewards` 為獎勵系統預留參數，目前未使用）；上一次看到的等級與各漸進任務階段存在 `localStorage` 的 `seen:<userId>`，跨次開啟也能宣告升級與升階。
 - **錯誤顯示**：`api()` 把錯誤回應與網路失敗轉成 `UI.ApiError`，由 `showError` 以紅色 toast 顯示 `error.message`；其他例外照常往上丟。
 
 ## 8. 容器化
