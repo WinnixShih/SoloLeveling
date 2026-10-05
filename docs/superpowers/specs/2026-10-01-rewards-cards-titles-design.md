@@ -21,7 +21,7 @@
 
 | 觸發 | 寶箱 | 判定 |
 | --- | --- | --- |
-| 每升 1 級 | E | 請求前後 `Level` 差幾級發幾個 |
+| 每升 1 級 | E | 只對超過 `Player.PeakLevel` 的等級發，撤銷降級後再升回來不重發 |
 | 階級晉升（E→D…→S） | C | 前後 `Leveling.RankOf` 不同；另送 1 張保險卡 |
 | 最佳連續達 7 天 | C | `BestStreak` 首次跨過 7 |
 | 最佳連續達 30 天 | A | `BestStreak` 首次跨過 30 |
@@ -31,7 +31,7 @@
 
 - 寶箱建立後為「未開啟」，使用者手動開。
 - 「首次跨過」以既有的一次性紀錄防重複：連續 7／30 天由對應成就（第 5 節）同時判定，已解鎖就不再發。
-- 排程結算不發獎勵；等使用者下一次請求時由該請求的前後差異發出。
+- 排程結算不發獎勵；等使用者下一次請求時由該請求補判定（成就以狀態判定，升級以 `PeakLevel` 判定）。
 
 ### 2. 開箱
 
@@ -114,11 +114,11 @@
 ### 8. 偵測與持久化
 
 - Domain 純規則 `Rewards.Evaluate(RewardInput input) → RewardOutcome`：
-  - `RewardInput` 含請求前快照 `PlayerSnapshot(Level, BestStreak, TotalCompleted)`、請求後 `Player`、已解鎖成就鍵集合、分類連續天數、分類累計分鐘、擁有卡片種數、本次完成的目標數、本次完成的週期數、是否建立了第一個目標、今日達標狀態的前後值。
+  - `RewardInput` 含請求前快照 `PlayerSnapshot(Level)`（只用來算回應的 `levelsGained`）、請求後 `Player`、已解鎖成就鍵集合、分類連續天數、分類累計分鐘、擁有卡片種數、本次完成的目標數、本次完成的週期數、是否建立了第一個目標、今日達標狀態的前後值。
   - `RewardOutcome` 含要建立的寶箱、要解鎖的成就、金幣事件、保險卡增減。
 - `Loot.Open(rarity, ownedCounts, rng) → LootResult(cardId, isDuplicate, coins)`。
-- `TodayContextLoader.LoadAsync` 在結算**之前**先拍 `PlayerSnapshot`，並在結算後批次載入第 6 節所需的統計與目標完成狀態，放入 `TodayContext`。
-- 所有會改玩家狀態的服務（今日進度、任務增刪改、目標建立與封存、困難模式、開新週期、商店）在 `SaveChangesAsync` 前統一呼叫一次 `Rewards.Evaluate` 並 `AddRange` 結果，與 XpEvent 的持久化一致。
+- `TodayContextLoader.LoadAsync` 在列鎖內、任何修改前拍 `PlayerSnapshot(Level)` 放入 `TodayContext.Before`；第 6 節所需的統計由 `RewardStatsLoader` 在第一次 `SaveChangesAsync` 之後批次載入（才看得到本次修改），目標完成由 `RewardApplier` 判定。
+- 所有會改玩家狀態的服務（今日進度、任務增刪改、目標建立與封存、困難模式、開新週期、商店）在第一次 `SaveChangesAsync` 之後統一呼叫一次 `RewardApplier.ApplyAsync`（內部執行 `Rewards.Evaluate`）並寫入結果，與 XpEvent 的持久化一致。
 - 保險卡消耗在 Domain `Settlement.Settle` 內處理（它本來就逐日判定達標），回傳的 `SettlementResult` 加上 `ShieldsUsed` 日期清單。
 
 ### 9. 資料模型
@@ -142,7 +142,7 @@
 
 - 導覽插入第三格「檔案 HUNTER」：狀態面板＋稱號組合器、金幣與保險卡、待開寶箱（開箱有翻牌動效與系統訊息）、成就清單（已解鎖亮起，未解鎖顯示條件與進度）、圖鑑網格、釘選卡。
 - 設定頁加「主題」：三個主題卡，未擁有顯示價格與購買。
-- 商店：放在檔案頁金幣旁的小視窗，三種商品。
+- 商店：放在檔案頁金幣旁的小視窗，兩項商品（保險卡、E 級寶箱）加一個前往設定頁買主題的連結。
 - 系統訊息依 `rewards` 依序顯示：升級 → 晉階 → 寶箱 → 成就 → 保險卡生效。
 
 ### 12. 錯誤處理

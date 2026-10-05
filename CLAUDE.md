@@ -37,12 +37,15 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 ## 關鍵不變式（改 code 前必看）
 
 - **Player.Xp 的任何變動都必須對應一筆 XpEvent。** Domain 規則方法（`ProgressUpdater`、`Settlement`、`Leveling`）只改記憶體中的實體並回傳事件，由 Api 服務層 `db.XpEvents.AddRange(...)` 持久化。直接呼叫 `Leveling.GainXp／LoseXp／ApplyPenalty` 時要自己補事件。
+- **Player.Coins 的任何變動都必須對應一筆 CoinEvent，一律經 `Wallet.Change`／`Wallet.Spend`。** 不要直接改 `Player.Coins`（測試種資料除外）。
+- **會改玩家狀態的端點在第一次 `SaveChangesAsync` 之後呼叫一次 `RewardApplier.ApplyAsync`，再 commit。** 它會查統計（要看得到本次修改）、寫寶箱／成就／金幣事件、回報保險卡事件並再存一次；回傳的 `RewardsDto` 放進回應的 `Rewards`。`GET /today`、`GET /me` 也要呼叫（結算可能消耗保險卡）；只讀的 `GET /rewards`（只結算）、`/cards`、`/goals`、`/history` 不呼叫，否則會吃掉待公告的保險卡事件。
+- **升級寶箱與晉階獎勵以 `Player.PeakLevel` 判定**，成就以「條件成立且未解鎖」判定；不要改成請求前後差，否則撤銷再完成可以刷寶箱。
 - **所有需要「今日」的端點都要先結算。** 服務層先 `db.Database.BeginTransactionAsync` → `TodayContextLoader.LoadAsync`（內部呼叫 `SettlementService.SettleAsync`，沿用呼叫端交易，以 `SELECT … FOR UPDATE` 鎖 Player 列）→ 修改 → `SaveChangesAsync` → `CommitAsync`。不需要今日的查詢（`QuestService.ListAsync`、`ReorderAsync`、`HistoryService.GetXpEventsAsync`）不結算。
 - **「今日」只能用 `UserClock.DateOf(now, user.TimeZoneId)` 決定。** 時間來源一律注入 `TimeProvider`（`clock.GetUtcNow()`），禁止直接用 `DateTime.Now`／`DateTime.UtcNow`。
 - **時間戳單位：** DB 是 `bigint` Unix 毫秒（`AppDbContext.ConfigureConventions` 的 value converter，全域套在 `DateTimeOffset`），API 出口是 Unix 秒（`Contracts/Mappers.ToUnixSeconds`）；只有這兩處可以換算。`DateOnly` 日期欄位（`StartDate`、`Date`、`LastSettledDate`）是 `date` 型別，API 用 `YYYY-MM-DD`。
 - **不硬刪 Quest／DailyLog。** 任務封存用 `IsArchived`＋`ArchivedAt`；已結算（`IsSettled`）的 DailyLog 不可再改。
 - **前端不計算 EXP／等級**，一律以 API 回傳值覆蓋畫面。
-- **前端色碼只能寫在 `app.css` 的 `tokens:start`～`tokens:end` 區塊**，其他地方用設計代號；主題以 `<html data-accent>` 切換。共用元件走 `ui.js` 的 `window.UI`，分頁加在 `app.js` 的 `NAV_ITEMS`，系統訊息的觸發統一由 `announce()` 比對。
+- **前端色碼只能寫在 `app.css` 的 `tokens:start`～`tokens:end` 區塊**，其他地方用設計代號；主題以 `<html data-accent>` 切換。共用元件走 `ui.js` 的 `window.UI`，分頁加在 `app.js` 的 `NAV_ITEMS`，系統訊息的觸發統一由 `announce()` 比對，獎勵訊息由 `api()` 收進 `state.pendingRewards`、`announceRewards` 依序顯示。
 - **錯誤格式 `{ error: { code, message } }`：** Api 層丟 `ApiErrorException`（有 `BadRequest／Unauthorized／NotFound／Conflict` 工廠方法），Domain 層丟 `DomainValidationException`（對應 400），由 `ErrorHandlingMiddleware` 轉換。模型繫結失敗與 JWT 401 也在 `Program.cs` 轉成同一格式。其他例外交給框架回 500。
 - **enum 序列化：** `StatType` 在 JSON 是代碼 `STR/VIT/INT/WIL/SPI`（`StatTypeJsonConverter`，在 `Program.cs` 必須註冊在 `JsonStringEnumConverter` 之前）；其他 enum 是字串名稱；DB 內 enum 一律存字串（`HasConversion<string>()`）。
 - **任務的判定與顯示一律用 `Progression.EffectiveTarget`／`RenderName`，不直接讀 `Quest.TargetValue`／`Name`。** 漸進任務的階段不存 DB，由 `TodayContext.DoneDaysBeforeToday` 算出，該字典由 `TodayContextLoader` 一次批次載入（`SetValue` 時傳入 `doneDaysBeforeToday` 以計算目標）。
@@ -57,6 +60,8 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 - **呼叫 `TodayContextLoader.LoadAsync` 前一定要先開交易。** 沒開的話 `SettlementService` 會自己開交易並 commit，Player 列鎖在載入今日、套規則之前就釋放，後續修改不再受鎖保護。
 - **`SettlementResult.TodayLog` 與 `TodayContext` 裡的實體都已被 DbContext 追蹤**，直接改屬性再 `SaveChangesAsync` 即可，不要再 `Attach`／`Update`。
 - **實體 `Program` 與 Api 的進入點 `Program` 同名。** Api 內參照實體時用別名 `using ProgramEntity = SoloLeveling.Domain.Entities.Program;`。
+- **`Settlement.Settle` 會消耗保險卡**（未達標、Streak > 0、ShieldCount > 0），`SettlementService` 把 `ShieldsUsed` 寫成未公告的 `RewardEvent`；排程結算也會走到這裡。
+- **`Achievements` 同名**：`SoloLeveling.Domain.Achievements` 是成就目錄（static），`AppDbContext.Achievements` 是已解鎖成就的 DbSet（實體 `Achievement`）。
 - **建置很嚴格：** `Directory.Build.props` 開了 `TreatWarningsAsErrors`、`EnforceCodeStyleInBuild`，src 專案 `GenerateDocumentationFile`（public 成員缺 XML 註解就建置失敗）；`.editorconfig` 對 `Migrations/` 關閉 analyzer；換行一律 LF（`.gitattributes` 的 `eol=lf`＋`.editorconfig`）。
 
 ## 測試慣例
@@ -80,6 +85,6 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 
 ## 目前狀態
 
-- 系統介面改版完成（純前端），測試全綠（207 個：Domain 142 + Api 65）。
+- MVP、引導式目標、系統介面改版、獎勵系統完成，測試全綠（321 個：Domain 236 + Api 85）。
 - GitHub 遠端 `origin` 是 `git@github.com:WinnixShih/SoloLeveling.git`，`main` 已 push 並追蹤 `origin/main`。
 - 待辦見 README「後續」：註冊 Email 唯一索引在極端併發下撞到會回 500（應改 409）、refresh token／登出即失效、前端離線暫存與 PWA 等。
