@@ -470,7 +470,25 @@
   }
 
   /* ---------- progress ---------- */
-  async function renderProgress() {
+  const WEEKDAYS = '日一二三四五六';
+  const weekdayOf = (iso) => WEEKDAYS[new Date(iso + 'T00:00:00Z').getUTCDay()];
+
+  function dayStatus(date, today, log) {
+    if (date > today) {
+      return { cls: 'future', label: '尚未到來' };
+    }
+    if (date === today) {
+      return log?.isCleared ? { cls: 'today cleared', label: '今日・已達標' } : { cls: 'today', label: '今日・尚未達標' };
+    }
+    return log?.isCleared ? { cls: 'cleared', label: '已達標' } : { cls: 'missed', label: '未達標' };
+  }
+
+  function dayCaption(cell) {
+    const { day, date, status } = cell.dataset;
+    return `第 ${day} 天 · ${date}（${weekdayOf(date)}）· ${status}`;
+  }
+
+  async function renderProgress(isCurrent = () => true) {
     renderHeader();
     const { program, player } = state.me;
     const today = state.today.date;
@@ -481,36 +499,61 @@
       api('GET', `/history?from=${addDays(today, -6)}&to=${today}`),
       api('GET', '/quests'),
     ]);
-    const byDate = Object.fromEntries(history.map((d) => [d.date, d]));
-    const cells = [];
-    for (let i = 0; i < program.lengthDays; i++) {
-      const date = addDays(program.startDate, i);
-      const d = byDate[date];
-      let cls = '';
-      if (date > today) cls = 'future';
-      else if (date === today) cls = 'today' + (d?.isCleared ? ' cleared' : '');
-      else cls = d?.isCleared ? 'cleared' : 'missed';
-      cells.push(`<i class="${cls}" title="${date}">${i + 1}</i>`);
+    if (!isCurrent()) {
+      return;
     }
+    const byDate = Object.fromEntries(history.map((d) => [d.date, d]));
+    const cells = Array.from({ length: program.lengthDays }, (_, i) => {
+      const date = addDays(program.startDate, i);
+      const { cls, label } = dayStatus(date, today, byDate[date]);
+      return `<button type="button" class="day ${cls}" data-day="${i + 1}" data-date="${date}" data-status="${label}" aria-pressed="false" aria-label="第 ${i + 1} 天，${date}，${label}">${i + 1}</button>`;
+    });
     const weekDates = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
     const weekByDate = Object.fromEntries(week.map((d) => [d.date, new Set(d.doneQuestIds)]));
+    const weekRows = quests.map((q) => `
+      <tr>
+        <th scope="row" class="week-name">${h(q.name)}</th>
+        ${weekDates.map((d) => {
+          const on = weekByDate[d]?.has(q.id);
+          return `<td><span class="week-dot ${on ? 'on' : ''}" role="img" aria-label="${d} ${on ? '完成' : '未完成'}"></span></td>`;
+        }).join('')}
+      </tr>`).join('');
     $view.innerHTML = `
-      <div class="card">
-        <h2>66 天計畫 · 第 ${program.cycle} 週期 · 第 ${program.dayNumber} 天${program.isCompleted ? '（已完成）' : ''}</h2>
-        <div class="grid66">${cells.join('')}</div>
-      </div>
-      <div class="card">
-        <h2>屬性</h2>
-        <div class="stats">${STAT_ORDER.map((s) => `<div><b>${player.stats[s.toLowerCase()]}</b><span>${STAT_NAMES[s]}</span></div>`).join('')}</div>
-        <div class="section-title" style="margin-top:12px">累計完成 ${player.totalCompleted} 次 · 最佳連續 ${player.bestStreak} 天</div>
-      </div>
-      <div class="card">
-        <h2>最近 7 天</h2>
-        <table class="dots">
-          <tr><th></th>${weekDates.map((d) => `<th>${d.slice(5).replace('-', '/')}</th>`).join('')}</tr>
-          ${quests.map((q) => `<tr><td class="name">${h(q.name)}</td>${weekDates.map((d) => `<td><span class="dot ${weekByDate[d]?.has(q.id) ? 'on' : ''}"></span></td>`).join('')}</tr>`).join('')}
-        </table>
-      </div>`;
+      ${UI.win({ title: '66 天計畫', body: `
+        <div class="ratio-row">
+          <span>第 ${program.cycle} 週期 · 第 <b class="num">${program.dayNumber}</b> 天${program.isCompleted ? '（已完成）' : ''}</span>
+          <span class="latin-label">DAY ${program.dayNumber} / ${program.lengthDays}</span>
+        </div>
+        <div class="cal" id="cal">${cells.join('')}</div>
+        <p class="cal-readout" id="cal-readout" aria-live="polite"></p>` })}
+      ${UI.win({ title: '五維屬性', body: `
+        <div class="stats">${STAT_ORDER.map((s) => `<div class="stat"><span class="latin-label">${s}</span><b class="num">${h(player.stats[s.toLowerCase()])}</b><span class="sub">${STAT_NAMES[s]}</span></div>`).join('')}</div>
+        <p class="sub stats-foot">累計完成 ${player.totalCompleted} 次 · 最佳連續 ${player.bestStreak} 天</p>` })}
+      ${UI.win({ title: '最近 7 天', body: `
+        <table class="week">
+          <thead><tr><th scope="col"><span class="sr-only">任務</span></th>${weekDates.map((d) => `<th scope="col" title="${d}"><span class="num">${d.slice(8)}</span><span class="sub">${weekdayOf(d)}</span></th>`).join('')}</tr></thead>
+          <tbody>${weekRows}</tbody>
+        </table>` })}`;
+
+    const $cal = $view.querySelector('#cal');
+    const $readout = $view.querySelector('#cal-readout');
+    const select = (cell) => {
+      $cal.querySelectorAll('.day[aria-pressed="true"]').forEach((c) => c.setAttribute('aria-pressed', 'false'));
+      cell.setAttribute('aria-pressed', 'true');
+      $readout.textContent = dayCaption(cell);
+    };
+    $cal.addEventListener('click', (e) => {
+      const cell = e.target.closest('.day');
+      if (cell) {
+        select(cell);
+      }
+    });
+    const todayCell = $cal.querySelector('.day.today');
+    if (todayCell) {
+      select(todayCell);
+    } else {
+      $readout.textContent = '點選格子查看日期與達標狀況。';
+    }
   }
 
   /* ---------- settings ---------- */
