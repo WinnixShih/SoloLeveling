@@ -209,4 +209,81 @@ public class SettlementTests
         result.Today.Should().Be(new DateOnly(2026, 9, 28));
         player.Streak.Should().Be(1);
     }
+
+    [Fact]
+    public void Settle_漏一天且有保險卡_消耗1張且連勝延續()
+    {
+        var player = NewPlayer(lastSettled: Yesterday.AddDays(-1));
+        player.Streak = 4;
+        player.BestStreak = 4;
+        player.ShieldCount = 2;
+
+        var result = Settlement.Settle(player, Tz, [Log(Yesterday, 0.2m)], Now);
+
+        player.ShieldCount.Should().Be(1);
+        player.Streak.Should().Be(5);
+        player.BestStreak.Should().Be(5);
+        result.ShieldsUsed.Should().Equal(Yesterday);
+    }
+
+    [Fact]
+    public void Settle_補多天_保險卡逐日消耗_用完後歸零()
+    {
+        // 待結算 Yesterday-3 到 Yesterday 共 4 天，全部缺席
+        var player = NewPlayer(lastSettled: Yesterday.AddDays(-4));
+        player.Streak = 3;
+        player.ShieldCount = 2;
+
+        var result = Settlement.Settle(player, Tz, [], Now);
+
+        result.ShieldsUsed.Should().Equal(Yesterday.AddDays(-3), Yesterday.AddDays(-2));
+        player.ShieldCount.Should().Be(0);
+        player.Streak.Should().Be(0);
+        player.BestStreak.Should().Be(5);
+    }
+
+    [Fact]
+    public void Settle_Streak為0時未達標_不消耗保險卡()
+    {
+        var player = NewPlayer(lastSettled: Yesterday.AddDays(-1));
+        player.ShieldCount = 1;
+
+        var result = Settlement.Settle(player, Tz, [Log(Yesterday, 0m)], Now);
+
+        player.ShieldCount.Should().Be(1);
+        player.Streak.Should().Be(0);
+        result.ShieldsUsed.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Settle_達標日_不消耗保險卡()
+    {
+        var player = NewPlayer(lastSettled: Yesterday.AddDays(-1));
+        player.Streak = 2;
+        player.ShieldCount = 1;
+
+        var result = Settlement.Settle(player, Tz, [Log(Yesterday, 0.8m)], Now);
+
+        player.ShieldCount.Should().Be(1);
+        player.Streak.Should().Be(3);
+        result.ShieldsUsed.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Settle_困難模式用保險卡_連勝延續但懲罰照扣()
+    {
+        var player = NewPlayer(lastSettled: Yesterday.AddDays(-1), hardMode: true);
+        player.Streak = 2;
+        player.ShieldCount = 1;
+        player.Xp = 50;
+
+        // 0.9 < 困難模式門檻 1.0
+        var result = Settlement.Settle(player, Tz, [Log(Yesterday, 0.9m)], Now);
+
+        player.Streak.Should().Be(3);
+        player.ShieldCount.Should().Be(0);
+        player.Xp.Should().Be(35);
+        result.Events.Should().ContainSingle(e => e.Source == XpSource.Penalty && e.Amount == -15);
+        result.ShieldsUsed.Should().Equal(Yesterday);
+    }
 }
