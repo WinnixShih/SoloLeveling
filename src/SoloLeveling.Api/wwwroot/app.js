@@ -9,6 +9,7 @@
   const NAV_ITEMS = [
     { route: 'today', zh: '今日', en: 'TODAY' },
     { route: 'progress', zh: '進度', en: 'STATS' },
+    { route: 'hunter', zh: '檔案', en: 'HUNTER' },
     { route: 'settings', zh: '設定', en: 'SYS' },
   ];
 
@@ -16,7 +17,7 @@
   const $view = document.getElementById('view');
   const $nav = document.getElementById('nav');
 
-  const state = { token: localStorage.getItem('token'), me: null, today: null };
+  const state = { token: localStorage.getItem('token'), me: null, today: null, pendingRewards: [] };
   let routeSeq = 0;
 
   /* ---------- helpers ---------- */
@@ -62,6 +63,10 @@
     if (!res.ok) {
       throw new UI.ApiError(data?.error?.message || `請求失敗（${res.status}）`, res.status);
     }
+    // 每個會改狀態的回應都帶 rewards；集中收集，由 announceRewards 依序顯示一次
+    if (data && data.rewards) {
+      state.pendingRewards.push(data.rewards);
+    }
     return data;
   }
 
@@ -69,6 +74,8 @@
     state.token = null;
     state.me = null;
     state.today = null;
+    state.pendingRewards = [];
+    UI.setAccent('azure');
     localStorage.removeItem('token');
     location.hash = '#login';
   }
@@ -99,12 +106,55 @@
     $header.classList.remove('hidden');
   }
 
+  const CHEST_SOURCE_ZH = {
+    LevelUp: '升級',
+    RankUp: '晉階',
+    Streak7: '連續 7 天',
+    Streak30: '連續 30 天',
+    GoalCompleted: '目標完成',
+    ProgramCompleted: '66 天完成',
+    Purchase: '商店',
+  };
+
+  // 取出並清空 api() 收集到的 rewards；每筆只會顯示一次
+  function drainRewards() {
+    const list = state.pendingRewards;
+    state.pendingRewards = [];
+    return list;
+  }
+
+  // 依序顯示：升級 → 晉階 → 寶箱 → 成就 → 保險卡生效
+  function announceRewards(list, me) {
+    if (!list || list.length === 0) {
+      return;
+    }
+    const levels = list.reduce((sum, r) => sum + r.levelsGained, 0);
+    const rankUps = list.flatMap((r) => r.rankUps);
+    const shieldsGained = list.reduce((sum, r) => sum + r.shieldsGained, 0);
+    const chests = list.flatMap((r) => r.newChests);
+    const achievements = list.flatMap((r) => r.newAchievements);
+    const shieldUses = list.filter((r) => r.shieldsUsed.length > 0);
+    if (levels > 0) {
+      UI.sysMessage([`等級提升。目前 Lv.${me.player.level}。`]);
+    }
+    if (rankUps.length > 0) {
+      UI.sysMessage(rankUps.map((rank) => `階級晉升：${rank} 級。`)
+        .concat(shieldsGained > 0 ? [`獲得連勝保險卡 ${shieldsGained} 張。`] : []));
+    }
+    if (chests.length > 0) {
+      UI.sysMessage(chests.map((c) => `獲得 ${c.rarity} 級寶箱（${CHEST_SOURCE_ZH[c.source] || c.source}）。`)
+        .concat(['前往「檔案」開啟。']));
+    }
+    achievements.forEach((a) => UI.sysMessage([`成就解鎖「${a.name}」。`, `獲得稱號字塊「${a.titleText}」。`]));
+    shieldUses.forEach((r) => UI.sysMessage([`連勝保險已生效，剩餘 ${r.shieldCount} 張。`]));
+  }
+
   /**
-   * 比對前後兩次 /me 與 /today，依序送出系統訊息：任務完成、今日達標、升級、目標升階。
+   * 比對前後兩次 /me 與 /today，依序送出系統訊息：任務完成、今日達標、目標升階，最後接 rewards 的獎勵訊息。
    * 任務完成與達標只在兩份今日資料同一天、且前一份明確記錄為未完成（=== false）時宣告；
-   * prevMe、prevToday 為 null（第一次看到這個帳號）時不宣告。rewards 為獎勵結果，目前未使用。
+   * prevMe、prevToday 為 null（第一次看到這個帳號）時不宣告。rewards 預設取出 api() 累積的待顯示獎勵（升級、晉階、寶箱、成就、保險卡）。
    */
-  function announce(prevMe, prevToday, me, today, rewards) {
+  function announce(prevMe, prevToday, me, today, rewards = drainRewards()) {
     if (prevToday && prevToday.date === today.date) {
       const before = new Map(prevToday.quests.map((q) => [q.id, q]));
       today.quests.forEach((q) => {
@@ -116,9 +166,6 @@
         UI.sysMessage(['今日任務達成率已達門檻。', today.bonusGranted ? '今日達標，達標獎勵已發放。' : '今日達標。']);
       }
     }
-    if (prevMe && me.player.level > prevMe.player.level) {
-      UI.sysMessage([`等級提升。Lv.${prevMe.player.level} → Lv.${me.player.level}。`]);
-    }
     if (prevToday) {
       const stages = new Map(prevToday.quests.filter((q) => q.progression).map((q) => [q.id, q.progression.stage]));
       today.quests.forEach((q) => {
@@ -128,6 +175,7 @@
         }
       });
     }
+    announceRewards(rewards, me);
   }
 
   const seenKey = (me) => `seen:${me.user.id}`;
@@ -169,6 +217,7 @@
     writeSeen(me, today);
     state.me = me;
     state.today = today;
+    UI.setAccent(me.player.themeKey || 'azure');
   }
 
   /* ---------- auth ---------- */
@@ -460,6 +509,8 @@
           await api('POST', '/goals', { goals: goalsBody(), basicQuestIndexes });
           UI.sysMessage(['計畫已建立。', '系統將依計畫發布每日任務。']);
           if (single) {
+            // 單一目標建立後直接重畫設定頁，不經 loadToday，獎勵在這裡顯示
+            announceRewards(drainRewards(), state.me);
             if (isCurrent()) {
               await renderSettings();
             }
@@ -596,6 +647,10 @@
     if (!isCurrent()) {
       return;
     }
+    const theme = await Hunter.themeSection({ api, reload: route });
+    if (!isCurrent()) {
+      return;
+    }
     const goals = goalsRes.goals;
     const activeCategories = goals.map((g) => g.category);
     const { player, user, program } = state.me;
@@ -624,6 +679,7 @@
           <input id="hard" class="sr-only" type="checkbox" role="switch" ${player.hardMode ? 'checked' : ''}>
           <span class="switch-track" aria-hidden="true"></span>
         </label>` })}
+      ${theme.html}
       ${UI.win({ title: '目標', body: `
         ${goalList}
         <div class="actions"><button id="add-goal" type="button" class="btn btn-primary">＋ 新增目標</button></div>` })}
@@ -638,11 +694,13 @@
         <p class="account">${h(user.email)}<span class="sub">時區 ${h(user.timeZoneId)}</span></p>
         <div class="actions"><button id="logout" type="button" class="btn btn-ghost">登出</button></div>` })}`;
 
+    theme.bind($view);
     const $editor = $view.querySelector('#quest-editor');
     // 非同步操作完成後，使用者可能已切到其他頁；只在仍停留設定頁時才重繪
     const onSettings = () => location.hash === '#settings';
     const refresh = async () => {
       state.me = await api('GET', '/me');
+      announceRewards(drainRewards(), state.me);
       if (onSettings()) {
         await renderSettings();
       }
@@ -696,6 +754,7 @@
       input.disabled = true;
       try {
         state.me = await api('PATCH', '/me', { hardMode: input.checked });
+        announceRewards(drainRewards(), state.me);
         renderHeader();
         UI.sysMessage([input.checked ? '困難模式已開啟。達標門檻提高為 100%。' : '困難模式已關閉。']);
       } catch (err) {
@@ -782,6 +841,9 @@
       setActiveNav(current);
       if (current === 'progress') {
         await renderProgress(isCurrent);
+      } else if (current === 'hunter') {
+        renderHeader(false);
+        await Hunter.render({ api, view: $view, me: state.me, today: state.today, reload: route, isCurrent });
       } else if (current === 'settings') {
         await renderSettings(isCurrent);
       } else {

@@ -15,6 +15,10 @@
   --rarity-c: #6fcf8e;
   --rarity-a: #c58bff;
   --rarity-s: #ffc95c;
+  /* 主題卡色票，與三個主題的 --accent 相同 */
+  --swatch-azure: #5cb6ff;
+  --swatch-violet: #a585ff;
+  --swatch-jade: #4fdcaa;
 }
 
 :root,
@@ -588,4 +592,123 @@ input.limit-input { width: 76px; text-align: right; }
     scroll-behavior: auto !important;
   }
   .sysmsg { transform: none; }
+}
+
+/* ---- 檔案 HUNTER（獎勵系統） ---- */
+.hcard {
+  --card-rarity: var(--rarity-e);
+  position: relative;
+  aspect-ratio: 2 / 3;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--card-rarity), var(--panel-solid) 70%);
+  box-shadow: inset 0 0 0 1px var(--card-rarity), 0 0 16px -6px var(--card-rarity);
+}
+.hcard.rarity-C { --card-rarity: var(--rarity-c); }
+.hcard.rarity-A { --card-rarity: var(--rarity-a); }
+.hcard.rarity-S { --card-rarity: var(--rarity-s); }
+.hcard img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.hcard-frame {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 18px 8px 6px;
+  background: linear-gradient(transparent, color-mix(in srgb, var(--bg) 85%, transparent));
+}
+.hcard-rarity { font-family: var(--latin); font-weight: 700; color: var(--card-rarity); }
+.hcard-name { font-family: var(--serif); font-size: 12px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hcard-unknown { display: grid; place-items: center; background: var(--panel-solid); filter: grayscale(1); opacity: .55; }
+.hcard-q { font-family: var(--serif); font-size: 28px; color: var(--muted); }
+.hcard-lg { width: min(240px, 70vw); margin: 0 auto; }
+.hunter-pinned { display: grid; }
+
+.card-cell { position: relative; padding: 0; border: 0; background: none; min-height: var(--tap); cursor: pointer; touch-action: manipulation; }
+.card-cell[disabled] { cursor: default; }
+.card-count { position: absolute; top: 4px; right: 6px; font-family: var(--mono); font-size: 11px; color: var(--ink); }
+
+.hunter-wallet { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.title-now { font-family: var(--serif); font-size: 20px; text-align: center; margin-bottom: 8px; }
+.title-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.title-picker select { width: 100%; min-height: var(--tap); }
+
+.chest-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.chest {
+  min-width: 72px;
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-solid);
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.chest:disabled { opacity: .5; cursor: default; }
+.chest-rank { font-family: var(--latin); font-size: 22px; font-weight: 700; }
+.chest-source { font-size: 11px; color: var(--muted); }
+
+.achievements { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.achievements li { opacity: .6; }
+.achievements li.unlocked { opacity: 1; }
+.ach-name { font-family: var(--serif); }
+.ach-cond, .ach-progress { font-size: 12px; color: var(--muted); }
+.ach-bar { height: 4px; border-radius: 2px; background: var(--line-soft); overflow: hidden; margin-top: 4px; }
+.ach-bar i { display: block; height: 100%; background: var(--accent); }
+
+.hunter-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: grid;
+  place-items: center;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+}
+.hunter-modal-inner { width: min(420px, 100%); max-height: 90vh; overflow-y: auto; display: grid; gap: 12px; text-align: center; }
+
+.flip { perspective: 800px; width: min(240px, 70vw); margin: 0 auto; }
+.flip-inner { position: relative; aspect-ratio: 2 / 3; transform-style: preserve-3d; transition: transform .7s ease; }
+.flip.flipped .flip-inner { transform: rotateY(180deg); }
+.flip-back, .flip-front { position: absolute; inset: 0; backface-visibility: hidden; }
+.flip-front { transform: rotateY(180deg); }
+.flip-front .hcard-lg { width: 100%; }
+.flip-back {
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--panel-solid);
+  box-shadow: var(--glow);
+  font-family: var(--latin);
+  font-size: 48px;
+  color: var(--accent);
+}
+
+.shop-item, .theme-card { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.theme-swatch { width: 24px; height: 24px; border-radius: 50%; flex: none; }
+.theme-card[data-theme-key="azure"] .theme-swatch { background: var(--swatch-azure); }
+.theme-card[data-theme-key="violet"] .theme-swatch { background: var(--swatch-violet); }
+.theme-card[data-theme-key="jade"] .theme-swatch { background: var(--swatch-jade); }
+.theme-name { flex: 1; text-align: left; }
+
+.pinned-thumb {
+  display: inline-block;
+  width: 24px;
+  aspect-ratio: 2 / 3;
+  border-radius: 3px;
+  overflow: hidden;
+  vertical-align: middle;
+  margin-left: 6px;
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.pinned-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+@media (prefers-reduced-motion: reduce) {
+  .flip-inner { transition: none; }
 }

@@ -187,7 +187,7 @@
         <div class="status-top">
           ${lv}
           <div class="who">
-            <span class="who-name">${h(me.user.displayName)}</span>
+            <span class="who-name">${h(me.user.displayName)}${pinnedThumb(p.pinnedCard)}</span>
             ${p.title ? `<span class="who-title">稱號　<em>${h(p.title)}</em></span>` : ''}
           </div>
           ${rank}
@@ -195,6 +195,16 @@
         ${bar}
         <div class="chips">${chips.join('')}</div>
       </section>`;
+  }
+
+  /* ---------- 釘選卡小圖 ---------- */
+
+  // 狀態面板名稱旁的釘選卡小圖；圖檔不存在時只剩稀有度色框
+  function pinnedThumb(card) {
+    if (!card) {
+      return '';
+    }
+    return `<span class="pinned-thumb rarity-${h(card.rarity)}" title="${h(card.name)}"><img src="${h(card.image)}" alt="" onerror="this.remove()"></span>`;
   }
 
   /* ---------- 二段式確認 ---------- */
