@@ -28,15 +28,6 @@
     return d.toISOString().slice(0, 10);
   };
 
-  // 成功訊息走系統訊息，錯誤走紅色 toast
-  function toast(msg, ok = false) {
-    if (ok) {
-      UI.sysMessage([msg]);
-    } else {
-      UI.toastError(msg);
-    }
-  }
-
   // 只顯示 API 與網路錯誤；其他例外屬程式錯誤，照常往上丟
   function showError(err) {
     if (!(err instanceof UI.ApiError)) {
@@ -375,10 +366,13 @@
     ScreenTime: '每天手機使用上限逐步降低',
   };
 
-  function questionInput(q) {
-    if (q.type === 'Time') return `<input type="time" name="${q.key}" required>`;
+  // value 為上一步已填過的答案，回上一步時帶回欄位
+  function questionInput(q, name, value) {
+    if (q.type === 'Time') {
+      return `<input type="time" name="${name}" required value="${h(value ?? '')}">`;
+    }
     const step = q.type === 'Integer' ? 1 : 0.25;
-    return `<input type="number" name="${q.key}" required min="${num(q.min)}" max="${num(q.max)}" step="${step}" value="${num(q.default)}">`;
+    return `<input type="number" inputmode="decimal" name="${name}" required min="${num(q.min)}" max="${num(q.max)}" step="${step}" value="${h(value ?? num(q.default))}">`;
   }
 
   // single=true 時只做一個類別（設定頁「新增目標」），不顯示基本任務；excluded 為已有進行中的類別
@@ -386,82 +380,90 @@
     renderHeader();
     const defs = await api('GET', '/goals/categories');
     const categories = defs.categories.filter((c) => !excluded.includes(c.category));
-    let step = 1;
     let chosen = [];
     const answers = {};
+    const goalsBody = () => chosen.map((c) => ({ category: c.category, answers: answers[c.category] }));
+    const stepWin = (n, title, body) => UI.win({ title, cls: 'onboarding', body: `<span class="win-step">STEP ${n} / 3</span>${body}` });
+    const cancelButton = single ? '<button type="button" class="btn btn-ghost cancel">取消</button>' : '';
 
     const renderStep1 = () => {
-      $view.innerHTML = `
-        <div class="card">
-          <h2>${single ? '新增目標' : '先設定你的目標'}</h2>
-          <p class="sub">選擇想改善的項目，系統會依你的現況安排每天的任務，並逐步逼近目標。</p>
-          <div class="choices">${categories.map((c) => `
-            <label class="choice"><input type="${single ? 'radio' : 'checkbox'}" name="cat" value="${c.category}"><div><b>${h(c.title)}</b><div class="sub">${h(CATEGORY_HINT[c.category] ?? '')}</div></div></label>`).join('')}</div>
-          <div class="actions"><button id="next" class="small primary">下一步</button></div>
-        </div>`;
+      if (!categories.length) {
+        $view.innerHTML = stepWin(1, '新增目標', `<p class="sub">所有目標類別都已在進行中。</p><div class="actions">${cancelButton}</div>`);
+        $view.querySelector('.cancel')?.addEventListener('click', () => renderSettings());
+        return;
+      }
+      $view.innerHTML = stepWin(1, single ? '新增目標' : '先設定你的目標', `
+        <p class="sub">選擇想改善的項目，系統會依你的現況安排每天的任務，並逐步逼近目標。</p>
+        <div class="choices">${categories.map((c) => `
+          <label class="choice"><input type="${single ? 'radio' : 'checkbox'}" name="cat" value="${c.category}" ${chosen.some((x) => x.category === c.category) ? 'checked' : ''}><span><b>${h(c.title)}</b><span class="sub">${h(CATEGORY_HINT[c.category] ?? '')}</span></span></label>`).join('')}</div>
+        <div class="actions">${cancelButton}<button id="next" type="button" class="btn btn-primary">下一步</button></div>`);
+      $view.querySelector('.cancel')?.addEventListener('click', () => renderSettings());
       $view.querySelector('#next').addEventListener('click', () => {
         chosen = [...$view.querySelectorAll('input[name=cat]:checked')].map((el) => categories.find((c) => c.category === el.value));
-        if (!chosen.length) { toast('至少選一個目標'); return; }
-        step = 2;
+        if (!chosen.length) {
+          UI.toastError('至少選一個目標');
+          return;
+        }
         renderStep2();
       });
     };
 
     const renderStep2 = () => {
-      $view.innerHTML = `
-        <div class="card">
-          <h2>回答幾個問題</h2>
-          <form id="qa">${chosen.map((c) => `
-            <div class="section-title">${h(c.title)}</div>
-            ${c.questions.map((q) => `<label class="field">${h(q.label)}${questionInput(q).replace('name="', `name="${c.category}.`)}</label>`).join('')}`).join('')}
-            <div class="actions"><button type="button" class="small back">上一步</button><button type="submit" class="small primary">預覽計畫</button></div>
-          </form>
-        </div>`;
-      $view.querySelector('.back').addEventListener('click', () => { step = 1; renderStep1(); });
-      $view.querySelector('#qa').addEventListener('submit', async (e) => {
+      $view.innerHTML = stepWin(2, '回答幾個問題', `
+        <form id="qa">${chosen.map((c) => `
+          <div class="plan-title">${h(c.title)}</div>
+          ${c.questions.map((q) => `<label class="field">${h(q.label)}${questionInput(q, `${c.category}.${q.key}`, answers[c.category]?.[q.key])}</label>`).join('')}`).join('')}
+          <div class="actions"><button type="button" class="btn btn-ghost back">上一步</button><button type="submit" class="btn btn-primary">預覽計畫</button></div>
+        </form>`);
+      $view.querySelector('.back').addEventListener('click', renderStep1);
+      const form = $view.querySelector('#qa');
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const form = e.target;
         chosen.forEach((c) => {
-          answers[c.category] = Object.fromEntries(c.questions.map((q) => [q.key, form[`${c.category}.${q.key}`].value]));
+          answers[c.category] = Object.fromEntries(c.questions.map((q) => [q.key, form.elements[`${c.category}.${q.key}`].value]));
         });
+        const submit = form.querySelector('button[type="submit"]');
+        submit.disabled = true;
         try {
           const preview = await api('POST', '/goals/preview', { goals: goalsBody(), basicQuestIndexes: [] });
-          step = 3;
-          renderStep3(preview, defs.basicQuests);
+          renderStep3(preview);
         } catch (err) {
-          toast(err.message);
+          showError(err);
+        } finally {
+          submit.disabled = false;
         }
       });
     };
 
-    const goalsBody = () => chosen.map((c) => ({ category: c.category, answers: answers[c.category] }));
-
-    const renderStep3 = (preview, basics) => {
+    const renderStep3 = (preview) => {
       const replaced = new Set(chosen.flatMap((c) => c.replacesBasicQuestIndexes));
+      const plan = preview.goals.map((g) => `
+        <div class="plan-title">${h(g.title)}</div>
+        ${g.quests.map((q) => `<div class="plan-quest"><b>${h(q.name)}</b><span class="sub">${h(q.startLabel)} → ${h(q.endLabel)}，共 ${q.stageCount} 階，每 ${q.daysPerStep} 天達標就${h(q.stepLabel)}</span></div>`).join('')}`).join('');
+      const basics = single ? '' : UI.win({ title: '基本任務', body: `
+        <p class="sub">也可以一併加入這些日常任務，被目標取代的已排除。</p>
+        <div class="choices">${defs.basicQuests.map((b) => `<label class="choice"><input type="checkbox" name="basic" value="${b.index}" ${replaced.has(b.index) ? 'disabled' : 'checked'}><span>${h(b.name)} <span class="chip">${h(b.statType)}</span></span></label>`).join('')}</div>` });
       $view.innerHTML = `
-        <div class="card">
-          <h2>你的計畫</h2>
-          ${preview.goals.map((g) => `
-            <div class="section-title">${h(g.title)}</div>
-            ${g.quests.map((q) => `
-              <div class="quest"><div class="name">${h(q.name)}<span class="sub">${h(q.startLabel)} → ${h(q.endLabel)}，共 ${q.stageCount} 階，每 ${q.daysPerStep} 天達標就${h(q.stepLabel)}</span></div></div>`).join('')}`).join('')}
-        </div>
-        ${single ? '' : `
-        <div class="card">
-          <h2>基本任務</h2>
-          <p class="sub">也可以一併加入這些日常任務，被目標取代的已排除。</p>
-          ${basics.map((b) => `<label class="choice"><input type="checkbox" name="basic" value="${b.index}" ${replaced.has(b.index) ? 'disabled' : 'checked'}><div>${h(b.name)}<span class="badge">${b.statType}</span></div></label>`).join('')}
-        </div>`}
-        <div class="actions"><button class="small back">上一步</button><button id="confirm" class="small primary">開始</button></div>`;
-      $view.querySelector('.back').addEventListener('click', () => { step = 2; renderStep2(); });
-      $view.querySelector('#confirm').addEventListener('click', async () => {
+        ${stepWin(3, '你的計畫', plan)}
+        ${basics}
+        <div class="actions"><button type="button" class="btn btn-ghost back">上一步</button><button id="confirm" type="button" class="btn btn-primary">開始</button></div>`;
+      $view.querySelector('.back').addEventListener('click', renderStep2);
+      $view.querySelector('#confirm').addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
         const basicQuestIndexes = single ? [] : [...$view.querySelectorAll('input[name=basic]:checked')].map((el) => Number(el.value));
+        btn.disabled = true;
         try {
           await api('POST', '/goals', { goals: goalsBody(), basicQuestIndexes });
-          toast('計畫已建立', true);
-          if (single) { await renderSettings(); } else { location.hash = '#today'; }
+          UI.sysMessage(['計畫已建立。', '系統將依計畫發布每日任務。']);
+          if (single) {
+            await renderSettings();
+          } else {
+            go('#today');
+          }
         } catch (err) {
-          toast(err.message);
+          showError(err);
+        } finally {
+          btn.disabled = false;
         }
       });
     };
@@ -561,6 +563,7 @@
     const isCheck = (q?.questType ?? 'Check') === 'Check';
     return `
       <form class="quest-form" data-id="${q?.id ?? ''}">
+        <span class="win-step">${q ? 'EDIT QUEST' : 'NEW QUEST'}</span>
         <label class="field">名稱<input name="name" type="text" required maxlength="60" value="${h(q?.name ?? '')}"></label>
         <div class="form-row">
           <label class="field">屬性<select name="statType">${STAT_ORDER.map((s) => `<option value="${s}" ${q?.statType === s ? 'selected' : ''}>${STAT_NAMES[s]} ${s}</option>`).join('')}</select></label>
@@ -571,58 +574,63 @@
           <label class="field">單位<input name="unit" type="text" maxlength="10" value="${h(q?.unit ?? '')}" ${isCheck ? 'disabled' : ''}></label>
         </div>
         <div class="form-row">
-          <label class="field">目標值<input name="targetValue" type="number" min="0.01" step="0.01" value="${num(q?.targetValue)}" ${isCheck ? 'disabled' : 'required'}></label>
-          <label class="field">每次增減<input name="step" type="number" min="0" step="0.01" value="${num(q?.step)}" ${isCheck ? 'disabled' : ''}></label>
+          <label class="field">目標值<input name="targetValue" type="number" inputmode="decimal" min="0.01" step="0.01" value="${num(q?.targetValue)}" ${isCheck ? 'disabled' : 'required'}></label>
+          <label class="field">每次增減<input name="step" type="number" inputmode="decimal" min="0" step="0.01" value="${num(q?.step)}" ${isCheck ? 'disabled' : ''}></label>
         </div>
         <div class="actions">
-          <button type="button" class="small cancel">取消</button>
-          <button type="submit" class="small primary">${q ? '儲存' : '新增'}</button>
+          <button type="button" class="btn btn-ghost cancel">取消</button>
+          <button type="submit" class="btn btn-primary">${q ? '儲存' : '新增'}</button>
         </div>
       </form>`;
   }
 
-  async function renderSettings() {
+  async function renderSettings(isCurrent = () => true) {
     renderHeader();
     const [quests, goalsRes] = await Promise.all([api('GET', '/quests'), api('GET', '/goals')]);
+    if (!isCurrent()) {
+      return;
+    }
     const goals = goalsRes.goals;
     const activeCategories = goals.map((g) => g.category);
     const { player, user, program } = state.me;
+    const goalList = goals.length ? goals.map((g) => `
+      <div class="goal-row" data-id="${g.id}">
+        <div class="goal-main">
+          <b>${h(g.title)}</b>
+          <span class="sub">自 ${h(g.startDate)} 起，${g.lengthDays} 天</span>
+          ${g.quests.map((q) => `<span class="sub">${q.isArchived ? '（已封存）' : ''}${h(q.name)} · 第 ${q.stage}/${q.stageCount} 階</span>`).join('')}
+        </div>
+        <button type="button" class="btn btn-danger archive-goal">封存</button>
+      </div>`).join('') : '<p class="sub">還沒有目標</p>';
+    const questList = quests.filter((q) => !q.goalId).map((q) => `
+      <div class="quest-admin" data-id="${q.id}">
+        <div class="quest-admin-name">
+          <span>${h(q.name)}</span>
+          <span class="chips"><span class="chip">${q.statType}</span><span class="chip">${h(q.difficulty)}</span><span class="chip">${QUEST_TYPES[q.questType]}</span></span>
+        </div>
+        <button type="button" class="btn btn-ghost edit">編輯</button>
+        <button type="button" class="btn btn-danger archive">封存</button>
+      </div>`).join('');
     $view.innerHTML = `
-      <div class="card">
-        <label class="switch"><span>困難模式<span class="sub" style="display:block;color:var(--muted);font-size:12px">門檻 100%，漏一天扣 EXP</span></span><input id="hard" type="checkbox" ${player.hardMode ? 'checked' : ''}></label>
-      </div>
-      <div class="card">
-        <h2>目標</h2>
-        ${goals.length ? goals.map((g) => `
-          <div class="goal" data-id="${g.id}">
-            <div class="name"><b>${h(g.title)}</b><span class="sub">自 ${h(g.startDate)} 起，${g.lengthDays} 天</span>
-              ${g.quests.map((q) => `<div class="sub">${q.isArchived ? '（已封存）' : ''}${h(q.name)} · 第 ${q.stage}／${q.stageCount} 階</div>`).join('')}
-            </div>
-            <button class="small danger archive-goal">封存</button>
-          </div>`).join('') : '<div class="sub">還沒有目標</div>'}
-        <div class="actions"><button id="add-goal" class="small primary">＋ 新增目標</button></div>
-      </div>
-      <div class="card">
-        <h2>任務</h2>
-        <div id="quest-list">${quests.filter((q) => !q.goalId).map((q) => `
-          <div class="qrow" data-id="${q.id}">
-            <div class="name">${h(q.name)}<span class="badge">${q.statType}</span><span class="badge">${h(q.difficulty)}</span><span class="badge">${QUEST_TYPES[q.questType]}</span></div>
-            <button class="small edit">編輯</button>
-            <button class="small danger archive">封存</button>
-          </div>`).join('')}</div>
-        <div id="quest-editor"></div>
-        <div class="actions"><button id="add-quest" class="small primary">＋ 新增任務</button></div>
-      </div>
-      <div class="card">
-        <h2>66 天計畫</h2>
-        <div>目前第 ${program.cycle} 週期，自 ${h(program.startDate)} 起，第 ${program.dayNumber} 天。</div>
-        <div class="actions"><button id="restart" class="small danger">開新 66 天</button></div>
-      </div>
-      <div class="card">
-        <h2>帳號</h2>
-        <div>${h(user.email)} · 時區 ${h(user.timeZoneId)}</div>
-        <div class="actions"><button id="logout" class="small">登出</button></div>
-      </div>`;
+      ${UI.win({ title: '困難模式', body: `
+        <label class="switch">
+          <span>啟用困難模式<span class="sub">門檻 100%，漏一天扣 EXP</span></span>
+          <input id="hard" class="sr-only" type="checkbox" role="switch" ${player.hardMode ? 'checked' : ''}>
+          <span class="switch-track" aria-hidden="true"></span>
+        </label>` })}
+      ${UI.win({ title: '目標', body: `
+        ${goalList}
+        <div class="actions"><button id="add-goal" type="button" class="btn btn-primary">＋ 新增目標</button></div>` })}
+      ${UI.win({ title: '任務管理', body: `
+        <div id="quest-admin-list">${questList || '<p class="sub">沒有一般任務</p>'}</div>
+        <div id="quest-editor" class="quest-editor"></div>
+        <div class="actions"><button id="add-quest" type="button" class="btn btn-primary">＋ 新增任務</button></div>` })}
+      ${UI.win({ title: '66 天計畫', body: `
+        <p>目前第 ${program.cycle} 週期，自 <span class="num">${h(program.startDate)}</span> 起，第 ${program.dayNumber} 天。</p>
+        <div class="actions"><button id="restart" type="button" class="btn btn-danger">開新 66 天</button></div>` })}
+      ${UI.win({ title: '帳號', body: `
+        <p class="account">${h(user.email)}<span class="sub">時區 ${h(user.timeZoneId)}</span></p>
+        <div class="actions"><button id="logout" type="button" class="btn btn-ghost">登出</button></div>` })}`;
 
     const $editor = $view.querySelector('#quest-editor');
     const refresh = async () => {
@@ -634,11 +642,15 @@
       const form = $editor.querySelector('form');
       const sync = () => {
         const isCheck = form.questType.value === 'Check';
-        ['unit', 'targetValue', 'step'].forEach((n) => { form[n].disabled = isCheck; });
+        ['unit', 'targetValue', 'step'].forEach((n) => {
+          form[n].disabled = isCheck;
+        });
         form.targetValue.required = !isCheck;
       };
       form.questType.addEventListener('change', sync);
-      form.querySelector('.cancel').addEventListener('click', () => { $editor.innerHTML = ''; });
+      form.querySelector('.cancel').addEventListener('click', () => {
+        $editor.innerHTML = '';
+      });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const isCheck = form.questType.value === 'Check';
@@ -651,53 +663,59 @@
           step: isCheck || form.step.value === '' ? null : Number(form.step.value),
           unit: isCheck || form.unit.value === '' ? null : form.unit.value,
         };
+        const submit = form.querySelector('button[type="submit"]');
+        submit.disabled = true;
         try {
-          if (q) await api('PUT', `/quests/${q.id}`, body);
-          else await api('POST', '/quests', body);
-          toast('已儲存', true);
+          if (q) {
+            await api('PUT', `/quests/${q.id}`, body);
+          } else {
+            await api('POST', '/quests', body);
+          }
+          UI.sysMessage([q ? `任務「${body.name}」已更新。` : `新任務「${body.name}」已登錄。`]);
           await refresh();
         } catch (err) {
-          toast(err.message);
+          showError(err);
+        } finally {
+          submit.disabled = false;
         }
       });
     };
 
     $view.querySelector('#hard').addEventListener('change', async (e) => {
+      const input = e.target;
+      input.disabled = true;
       try {
-        state.me = await api('PATCH', '/me', { hardMode: e.target.checked });
+        state.me = await api('PATCH', '/me', { hardMode: input.checked });
         renderHeader();
-        toast(e.target.checked ? '已開啟困難模式' : '已關閉困難模式', true);
+        UI.sysMessage([input.checked ? '困難模式已開啟。達標門檻提高為 100%。' : '困難模式已關閉。']);
       } catch (err) {
-        toast(err.message);
-        e.target.checked = !e.target.checked;
+        input.checked = !input.checked;
+        showError(err);
+      } finally {
+        input.disabled = false;
       }
     });
     $view.querySelector('#add-quest').addEventListener('click', () => bindForm(null));
-    $view.querySelectorAll('.qrow .edit').forEach((b) => b.addEventListener('click', () => {
-      bindForm(quests.find((q) => q.id === b.closest('.qrow').dataset.id));
-      $editor.scrollIntoView({ behavior: 'smooth' });
+    $view.querySelectorAll('.quest-admin .edit').forEach((b) => b.addEventListener('click', () => {
+      bindForm(quests.find((q) => q.id === b.closest('.quest-admin').dataset.id));
+      $editor.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     }));
-    // 封存與開新週期不用瀏覽器對話框，改成「再按一次確認」
-    const armConfirm = (btn, label, action) => {
-      btn.addEventListener('click', async () => {
-        if (btn.dataset.armed !== '1') {
-          btn.dataset.armed = '1';
-          btn.textContent = `再按一次確認${label}`;
-          setTimeout(() => { btn.dataset.armed = ''; btn.textContent = label; }, 3000);
-          return;
-        }
-        try {
-          await action();
-          await refresh();
-        } catch (err) {
-          toast(err.message);
-        }
-      });
-    };
-    $view.querySelectorAll('.qrow .archive').forEach((b) => armConfirm(b, '封存', () => api('DELETE', `/quests/${b.closest('.qrow').dataset.id}`)));
-    $view.querySelectorAll('.goal .archive-goal').forEach((b) => armConfirm(b, '封存', () => api('DELETE', `/goals/${b.closest('.goal').dataset.id}`)));
+    $view.querySelectorAll('.quest-admin .archive').forEach((b) => UI.confirmButton(b, '封存', async () => {
+      await api('DELETE', `/quests/${b.closest('.quest-admin').dataset.id}`);
+      UI.sysMessage(['任務已封存。']);
+      await refresh();
+    }));
+    $view.querySelectorAll('.goal-row .archive-goal').forEach((b) => UI.confirmButton(b, '封存', async () => {
+      await api('DELETE', `/goals/${b.closest('.goal-row').dataset.id}`);
+      UI.sysMessage(['目標已封存。']);
+      await refresh();
+    }));
     $view.querySelector('#add-goal').addEventListener('click', () => renderOnboarding({ single: true, excluded: activeCategories }));
-    armConfirm($view.querySelector('#restart'), '開新 66 天', () => api('POST', '/program/restart'));
+    UI.confirmButton($view.querySelector('#restart'), '開新 66 天', async () => {
+      await api('POST', '/program/restart');
+      UI.sysMessage(['新的 66 天計畫已開始。']);
+      await refresh();
+    });
     $view.querySelector('#logout').addEventListener('click', logout);
   }
 

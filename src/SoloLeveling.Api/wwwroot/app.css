@@ -523,31 +523,47 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
 .week-dot { display: inline-block; width: 10px; height: 10px; border: 1px solid var(--line-soft); border-radius: 50%; }
 .week-dot.on { background: var(--ok); border-color: var(--ok); box-shadow: 0 0 8px var(--ok); }
 
-/* legacy:start 舊版畫面沿用的樣式；各畫面改版時刪除對應段落 */
+/* ---- 引導 ---- */
+.win-step { display: block; margin: -4px 0 10px; color: var(--accent); font: 600 11px var(--latin); letter-spacing: .24em; text-align: center; }
+.choices { display: grid; gap: 8px; margin: 12px 0; }
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.choice:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 12px var(--line-soft); }
+.choice:has(input:disabled) { opacity: .5; cursor: default; }
+.choice input { flex: none; margin-top: 2px; }
+.choice .chip { margin-left: 4px; padding: 0 6px; font-size: 11px; }
+.plan-title { margin: 12px 0 4px; color: var(--accent); font: 600 13px var(--serif); letter-spacing: .1em; }
+.plan-quest { display: grid; gap: 2px; padding: 6px 0; border-top: 1px dashed var(--line-soft); overflow-wrap: anywhere; }
 
-/* legacy: shared */
-.card { padding: 14px; background: var(--panel); border: 1px solid var(--line-soft); }
-.card h2 { margin: 0 0 10px; color: var(--ink); font: 900 15px var(--serif); letter-spacing: .3em; }
-.section-title { margin: 18px 0 6px; color: var(--muted); font-size: 13px; letter-spacing: .08em; }
-button.small, button.primary, .tabs button { min-height: 32px; padding: 4px 12px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
-button.primary, .tabs button.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-button.danger { border-color: var(--bad); color: var(--bad); }
-button.small:disabled, button.primary:disabled { opacity: .5; cursor: default; }
-.badge { margin-left: 4px; padding: 2px 6px; border: 1px solid var(--line-soft); color: var(--muted); font-size: 11px; }
-.quest { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line-soft); }
-.quest:last-child { border-bottom: 0; }
-.quest .name { flex: 1; min-width: 0; }
-
-/* legacy: settings */
-.switch { display: flex; align-items: center; justify-content: space-between; }
-.switch input { width: 44px; height: 24px; }
-.qrow { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--line-soft); }
-.qrow:last-child { border-bottom: 0; }
-.qrow .name { flex: 1; min-width: 0; }
-.goal { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--line-soft); }
-
-/* legacy: onboarding */
-.choices { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
-.choice { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid var(--line-soft); cursor: pointer; }
-.choice input { margin-top: 3px; }
-/* legacy:end */
+/* ---- 設定 ---- */
+.switch { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--tap); cursor: pointer; }
+.switch-track { position: relative; flex: none; width: 48px; height: 26px; border: 1px solid var(--line); }
+.switch-track::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: var(--muted);
+  transition: transform .2s ease;
+}
+.switch input:checked + .switch-track { border-color: var(--accent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent); }
+.switch input:checked + .switch-track::before { background: var(--accent); transform: translateX(22px); }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch input:disabled + .switch-track { opacity: .5; }
+.goal-row, .quest-admin { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px dashed var(--line-soft); }
+.goal-row:first-child, .quest-admin:first-child { border-top: 0; }
+.goal-main { flex: 1 1 160px; min-width: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.quest-admin-name { flex: 1 1 140px; min-width: 0; display: grid; gap: 4px; overflow-wrap: anywhere; }
+.quest-admin .chip { padding: 1px 6px; font-size: 11px; }
+.quest-editor:not(:empty) { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.account { overflow-wrap: anywhere; }
