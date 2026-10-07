@@ -97,6 +97,21 @@ curl -s 'localhost:8080/api/v1/xp-events?limit=20' -H "Authorization: Bearer $TO
 
 # 開新 66 天
 curl -s -X POST localhost:8080/api/v1/program/restart -H "Authorization: Bearer $TOKEN"
+
+# 獎勵總覽、圖鑑、開箱
+curl -s localhost:8080/api/v1/rewards -H "Authorization: Bearer $TOKEN"
+curl -s localhost:8080/api/v1/cards -H "Authorization: Bearer $TOKEN"
+curl -s -X POST localhost:8080/api/v1/rewards/chests/<chestId>/open -H "Authorization: Bearer $TOKEN"
+
+# 商店（item：Shield／EChest／Theme）
+curl -s -X POST localhost:8080/api/v1/shop/purchase -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"item":"Theme","themeKey":"violet"}'
+
+# 稱號組合、主題
+curl -s -X PUT localhost:8080/api/v1/me/title -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"prefixKey":"bed-30","suffixKey":"quests-100"}'
+curl -s -X PUT localhost:8080/api/v1/me/theme -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"themeKey":"violet"}'
 ```
 
 ## 實作上的決定（規格未明定處）
@@ -110,10 +125,18 @@ curl -s -X POST localhost:8080/api/v1/program/restart -H "Authorization: Bearer 
 - **JWT 不放 `nbf`**：IdentityModel 的有效期驗證用真實時鐘，測試以假時鐘簽發時會被判尚未生效。
 - **XpEvent 沒有 `CreatedAt`**，`OccurredAt` 即建立時間。
 - **Email 重複**：以查詢先擋，極端併發下仍可能撞到唯一索引而回 500。
+- **升級寶箱以 PeakLevel 判定**：只對超過歷史最高等級的等級發 E 箱與晉階獎勵，撤銷降級後再升回來不重發；migration 把既有玩家的 PeakLevel 設為當時等級。
+- **成就以狀態判定**：條件成立且未解鎖就解鎖，因此上線前已達成的條件會在下一次請求補解鎖一次（含連續 7／30 天的寶箱）。
+- **達標金幣收回最多扣到 0**：金幣可能已花掉，收回時不讓餘額變負，事件金額等於實際扣除量。
+- **保險卡只在連勝進行中消耗**：Streak 為 0 時沒有東西可保護，不消耗；晉階送的保險卡受上限 3 截斷。
+- **封存回 200**：`DELETE /quests/{id}`、`DELETE /goals/{id}` 回 `{ rewards }`，封存造成的達標金幣與升級訊息才不會遺失。
+- **卡片插畫**：放 `wwwroot/cards/{id}.webp`（2:3、768×1152，不含邊框與文字）；缺檔時前端顯示稀有度色塊與名稱。
 
 ## 後續
 
-- 推播、好友、排名、卡片、專注計時器、AI 功能、原生 App、付費（規格明列第一階段不做）。
+- 推播、好友、排名、專注計時器、AI 功能、原生 App、付費（規格明列第一階段不做）。
 - Refresh token／登出即失效。
 - 註冊的 Email 唯一索引衝突改回 409。
 - 前端加離線暫存與 PWA。
+- GET /today、GET /me 每次讀取都套用獎勵判定（約 9 次查詢），之後可在無狀態變更時略過統計查詢。
+- 獎勵系統之後可能加：地下城、66 天 Boss、更多主題、稱號特效、以金幣兌換指定卡片。

@@ -23,6 +23,9 @@ public class DailyLog
     /// <summary>是否已發放當日達標獎勵（+30 EXP）。</summary>
     public bool BonusGranted { get; set; }
 
+    /// <summary>是否已發放當日達標金幣（+10）；跟著 <see cref="BonusGranted"/> 發放與收回。</summary>
+    public bool ClearCoinsGranted { get; set; }
+
     /// <summary>當日反思筆記，最長 2000 字。</summary>
     public string? Note { get; set; }
 

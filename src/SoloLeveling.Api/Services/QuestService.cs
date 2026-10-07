@@ -13,8 +13,9 @@ namespace SoloLeveling.Api.Services;
 /// </summary>
 /// <param name="db">DbContext。</param>
 /// <param name="loader">今日內容載入（含結算）。</param>
+/// <param name="rewardApplier">獎勵判定與持久化。</param>
 /// <param name="clock">時間來源。</param>
-public class QuestService(AppDbContext db, TodayContextLoader loader, TimeProvider clock)
+public class QuestService(AppDbContext db, TodayContextLoader loader, RewardApplier rewardApplier, TimeProvider clock)
 {
     /// <summary>
     /// GET /quests：未封存任務，依 SortOrder 排序。
@@ -57,8 +58,9 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, TimeProvid
 
         db.XpEvents.AddRange(ProgressUpdater.Recalculate(context.Player, context.TodayLog, context.ActiveQuests, clock.GetUtcNow()));
         await db.SaveChangesAsync(ct);
+        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
         await tx.CommitAsync(ct);
-        return quest.ToDto();
+        return quest.ToDto() with { Rewards = rewards };
     }
 
     /// <summary>
@@ -93,8 +95,9 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, TimeProvid
             quest.StatType = request.StatType;
             quest.Difficulty = request.Difficulty;
             await db.SaveChangesAsync(ct);
+            var lockedRewards = await rewardApplier.ApplyAsync(context, 0, ct);
             await tx.CommitAsync(ct);
-            return quest.ToDto();
+            return quest.ToDto() with { Rewards = lockedRewards };
         }
 
         Validate(request);
@@ -107,8 +110,9 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, TimeProvid
         Apply(quest, request);
         db.XpEvents.AddRange(ProgressUpdater.Recalculate(context.Player, context.TodayLog, context.ActiveQuests, now));
         await db.SaveChangesAsync(ct);
+        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
         await tx.CommitAsync(ct);
-        return quest.ToDto();
+        return quest.ToDto() with { Rewards = rewards };
     }
 
     /// <summary>
@@ -117,9 +121,9 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, TimeProvid
     /// <param name="userId">使用者 ID。</param>
     /// <param name="questId">任務 ID。</param>
     /// <param name="ct">取消權杖。</param>
-    /// <returns>非同步作業。</returns>
+    /// <returns>本次獎勵（封存可能讓今日達標）。</returns>
     /// <exception cref="ApiErrorException">任務不存在或不屬於此使用者（404）。</exception>
-    public async Task ArchiveAsync(Guid userId, Guid questId, CancellationToken ct)
+    public async Task<RewardsDto> ArchiveAsync(Guid userId, Guid questId, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var context = await loader.LoadAsync(userId, ct);
@@ -132,7 +136,9 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, TimeProvid
 
         db.XpEvents.AddRange(ProgressUpdater.Recalculate(context.Player, context.TodayLog, context.ActiveQuests, now));
         await db.SaveChangesAsync(ct);
+        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
         await tx.CommitAsync(ct);
+        return rewards;
     }
 
     /// <summary>

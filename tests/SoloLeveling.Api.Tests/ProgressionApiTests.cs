@@ -140,7 +140,7 @@ public sealed class ProgressionApiTests(PostgresFixture fixture) : IDisposable
     {
         var (client, bedId, _) = await SetupAsync();
 
-        (await client.DeleteAsync($"/api/v1/quests/{bedId}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync($"/api/v1/quests/{bedId}")).StatusCode.Should().Be(HttpStatusCode.OK);
 
         var goals = await client.GetFromJsonAsync<JsonElement>("/api/v1/goals");
         var routine = goals.GetProperty("goals").EnumerateArray().Single(g => g.GetProperty("category").GetString() == "Routine");

@@ -26,6 +26,9 @@ public class Program
     /// <summary>是否為目前進行中的週期。</summary>
     public bool IsActive { get; set; } = true;
 
+    /// <summary>完成時間（UTC）：開新週期時舊週期已滿 <see cref="LengthDays"/> 天才寫入；未完成為 null。</summary>
+    public DateTimeOffset? CompletedAt { get; set; }
+
     /// <summary>建立時間（UTC）。</summary>
     public DateTimeOffset CreatedAt { get; set; }
 }

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SoloLeveling.Domain.Entities;
+using SoloLeveling.Domain.Rules;
 using SoloLeveling.Infrastructure;
 
 namespace SoloLeveling.Api.Services;
@@ -13,13 +14,15 @@ namespace SoloLeveling.Api.Services;
 /// <param name="ActiveQuests">未封存任務，依 SortOrder 排序。</param>
 /// <param name="Today">使用者時區的今日。</param>
 /// <param name="DoneDaysBeforeToday">每個漸進任務在今天之前的達標天數；一般任務不在字典內。</param>
+/// <param name="Before">結算後、任何修改前的玩家快照（在列鎖內拍；結算不改等級，等同請求前的值），供獎勵回應的 levelsGained 使用。</param>
 public sealed record TodayContext(
     User User,
     Player Player,
     DailyLog TodayLog,
     List<Quest> ActiveQuests,
     DateOnly Today,
-    IReadOnlyDictionary<Guid, int> DoneDaysBeforeToday)
+    IReadOnlyDictionary<Guid, int> DoneDaysBeforeToday,
+    PlayerSnapshot Before)
 {
     /// <summary>
     /// 某任務在今天之前的達標天數；不在字典內（一般任務或新任務）回 0。
@@ -67,6 +70,6 @@ public class TodayContextLoader(AppDbContext db, SettlementService settlement)
                 .Select(g => new { QuestId = g.Key, Days = g.Count() })
                 .ToDictionaryAsync(x => x.QuestId, x => x.Days, ct);
 
-        return new TodayContext(user, player, settled.TodayLog, activeQuests, settled.Today, doneDays);
+        return new TodayContext(user, player, settled.TodayLog, activeQuests, settled.Today, doneDays, new PlayerSnapshot(player.Level));
     }
 }

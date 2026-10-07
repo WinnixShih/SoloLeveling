@@ -1,21 +1,21 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-accent="azure">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
   <title>SoloLeveling</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;900&display=swap">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
   <header id="header" class="header hidden"></header>
   <main id="view" class="view"></main>
-  <nav id="nav" class="nav hidden">
-    <a href="#today" data-route="today">今日</a>
-    <a href="#progress" data-route="progress">進度</a>
-    <a href="#settings" data-route="settings">設定</a>
-  </nav>
-  <div id="toast" class="toast hidden"></div>
+  <nav id="nav" class="nav hidden" aria-label="主要分頁"></nav>
+  <script src="ui.js"></script>
+  <script src="hunter.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

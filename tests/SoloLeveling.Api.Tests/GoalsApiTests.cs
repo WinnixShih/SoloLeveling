@@ -198,7 +198,7 @@ public sealed class GoalsApiTests(PostgresFixture fixture) : IDisposable
 
         var del = await client.DeleteAsync($"/api/v1/goals/{goalId}");
 
-        del.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        del.StatusCode.Should().Be(HttpStatusCode.OK);
         var today = await client.GetFromJsonAsync<JsonElement>("/api/v1/today");
         today.GetProperty("quests").EnumerateArray().Select(q => q.GetProperty("name").GetString()).Should().Equal("喝水");
         var goals = await client.GetFromJsonAsync<JsonElement>("/api/v1/goals");

@@ -1,3 +1,4 @@
+using SoloLeveling.Domain;
 using SoloLeveling.Domain.Entities;
 using SoloLeveling.Domain.Rules;
 using ProgramEntity = SoloLeveling.Domain.Entities.Program;
@@ -25,24 +26,30 @@ public static class Mappers
         return new QuestDto(quest.Id, Progression.RenderFinalName(quest), quest.StatType, quest.Difficulty, quest.QuestType, quest.TargetValue, quest.Step, quest.Unit, quest.SortOrder, quest.GoalId);
     }
 
-    /// <summary>玩家狀態；displayStreak 依今日是否達標即時加 1。</summary>
+    /// <summary>玩家狀態；displayStreak 依今日是否達標即時加 1，title 為組合後稱號（見 <see cref="Titles.Compose"/>）。</summary>
     /// <param name="player">玩家實體。</param>
     /// <param name="todayCleared">今日是否達標。</param>
     /// <returns>DTO。</returns>
     public static PlayerDto ToDto(this Player player, bool todayCleared)
     {
         var rank = Leveling.RankOf(player.Level);
+        var pinned = player.PinnedCardId is { } cardId ? Cards.Find(cardId)?.ToDto() : null;
         return new PlayerDto(
             player.Level,
             player.Xp,
             Leveling.XpNeeded(player.Level),
             rank.Rank,
-            rank.Title,
+            Titles.Compose(player.TitlePrefixKey, player.TitleSuffixKey, player.Level),
             new StatsDto(player.Str, player.Vit, player.Int, player.Wil, player.Spi),
             player.HardMode,
             player.Streak + (todayCleared ? 1 : 0),
             player.BestStreak,
-            player.TotalCompleted);
+            player.TotalCompleted,
+            rank.Title,
+            player.Coins,
+            player.ShieldCount,
+            player.ThemeKey,
+            pinned);
     }
 
     /// <summary>66 天計畫；dayNumber 以今日計算。</summary>
@@ -53,6 +60,30 @@ public static class Mappers
     {
         var dayNumber = today.DayNumber - program.StartDate.DayNumber + 1;
         return new ProgramDto(program.StartDate, program.Cycle, dayNumber, program.LengthDays, dayNumber > program.LengthDays);
+    }
+
+    /// <summary>寶箱。</summary>
+    /// <param name="chest">寶箱實體。</param>
+    /// <returns>DTO。</returns>
+    public static ChestDto ToDto(this RewardChest chest)
+    {
+        return new ChestDto(chest.Id, chest.Rarity, chest.Source, chest.CreatedAt.ToUnixSeconds());
+    }
+
+    /// <summary>卡片目錄項目。</summary>
+    /// <param name="card">卡片定義。</param>
+    /// <returns>DTO。</returns>
+    public static CardDto ToDto(this CardDefinition card)
+    {
+        return new CardDto(card.Id, card.Name, card.Rarity, card.Flavor, card.Image);
+    }
+
+    /// <summary>新解鎖的成就。</summary>
+    /// <param name="achievement">成就定義。</param>
+    /// <returns>DTO。</returns>
+    public static UnlockedAchievementDto ToUnlockedDto(this AchievementDefinition achievement)
+    {
+        return new UnlockedAchievementDto(achievement.Key, achievement.Name, achievement.TitleText, achievement.Slot);
     }
 
     /// <summary>時間戳轉 Unix 秒。</summary>

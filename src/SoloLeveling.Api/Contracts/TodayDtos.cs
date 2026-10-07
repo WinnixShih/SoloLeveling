@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using SoloLeveling.Domain;
 
 namespace SoloLeveling.Api.Contracts;
@@ -10,7 +11,16 @@ namespace SoloLeveling.Api.Contracts;
 /// <param name="BonusGranted">是否已發達標獎勵。</param>
 /// <param name="Note">今日反思。</param>
 /// <param name="Quests">任務與進度。</param>
-public record TodayResponse(DateOnly Date, decimal CompletionRatio, bool IsCleared, decimal Threshold, bool BonusGranted, string? Note, List<TodayQuestDto> Quests);
+/// <param name="Rewards">本次請求的獎勵。</param>
+public record TodayResponse(
+    DateOnly Date,
+    decimal CompletionRatio,
+    bool IsCleared,
+    decimal Threshold,
+    bool BonusGranted,
+    string? Note,
+    List<TodayQuestDto> Quests,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RewardsDto? Rewards = null);
 
 /// <summary>今日的單一任務與進度。</summary>
 /// <param name="Id">任務 ID。</param>

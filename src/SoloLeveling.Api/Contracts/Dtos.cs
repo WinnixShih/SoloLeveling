@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using SoloLeveling.Domain;
 
 namespace SoloLeveling.Api.Contracts;
@@ -48,13 +49,33 @@ public record StatsDto(int Str, int Vit, int Int, int Wil, int Spi);
 /// <param name="Xp">目前等級內的 EXP。</param>
 /// <param name="XpNeeded">升到下一級所需 EXP。</param>
 /// <param name="Rank">階級（E–S）。</param>
-/// <param name="Title">稱號。</param>
+/// <param name="Title">顯示用稱號：有選字塊時為「前綴・後綴」組合，否則等於 <paramref name="RankTitle"/>。</param>
 /// <param name="Stats">五維屬性。</param>
 /// <param name="HardMode">是否困難模式。</param>
 /// <param name="DisplayStreak">顯示用連續天數（含今日即時值）。</param>
 /// <param name="BestStreak">最高連續天數。</param>
 /// <param name="TotalCompleted">累計完成任務次數。</param>
-public record PlayerDto(int Level, int Xp, int XpNeeded, string Rank, string Title, StatsDto Stats, bool HardMode, int DisplayStreak, int BestStreak, int TotalCompleted);
+/// <param name="RankTitle">階級稱號（新手、見習者…）。</param>
+/// <param name="Coins">金幣餘額。</param>
+/// <param name="ShieldCount">連勝保險卡張數。</param>
+/// <param name="ThemeKey">目前主題鍵（azure／violet／jade）。</param>
+/// <param name="PinnedCard">釘選展示的卡片；未釘選為 null。</param>
+public record PlayerDto(
+    int Level,
+    int Xp,
+    int XpNeeded,
+    string Rank,
+    string Title,
+    StatsDto Stats,
+    bool HardMode,
+    int DisplayStreak,
+    int BestStreak,
+    int TotalCompleted,
+    string RankTitle,
+    int Coins,
+    int ShieldCount,
+    string ThemeKey,
+    CardDto? PinnedCard);
 
 /// <summary>66 天計畫。</summary>
 /// <param name="StartDate">起始日。</param>
@@ -62,14 +83,27 @@ public record PlayerDto(int Level, int Xp, int XpNeeded, string Rank, string Tit
 /// <param name="DayNumber">今日是第幾天（從 1 起）。</param>
 /// <param name="LengthDays">週期長度。</param>
 /// <param name="IsCompleted">是否已超過週期長度。</param>
-public record ProgramDto(DateOnly StartDate, int Cycle, int DayNumber, int LengthDays, bool IsCompleted);
+/// <param name="Rewards">本次請求的獎勵；只有 POST /program/restart 帶，其他地方為 null 並從 JSON 省略。</param>
+public record ProgramDto(
+    DateOnly StartDate,
+    int Cycle,
+    int DayNumber,
+    int LengthDays,
+    bool IsCompleted,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RewardsDto? Rewards = null);
 
 /// <summary>玩家總覽。</summary>
 /// <param name="User">使用者。</param>
 /// <param name="Player">玩家狀態。</param>
 /// <param name="Program">66 天計畫。</param>
 /// <param name="NeedsOnboarding">是否需要引導（沒有任何未封存任務）。</param>
-public record MeResponse(UserDto User, PlayerDto Player, ProgramDto Program, bool NeedsOnboarding);
+/// <param name="Rewards">本次請求的獎勵。</param>
+public record MeResponse(
+    UserDto User,
+    PlayerDto Player,
+    ProgramDto Program,
+    bool NeedsOnboarding,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RewardsDto? Rewards = null);
 
 /// <summary>更新設定請求；省略的欄位不動。</summary>
 /// <param name="DisplayName">顯示名稱。</param>
@@ -98,7 +132,19 @@ public record QuestRequest(string Name, StatType StatType, Difficulty Difficulty
 /// <param name="Unit">單位。</param>
 /// <param name="SortOrder">顯示順序。</param>
 /// <param name="GoalId">所屬目標；一般任務為 null。</param>
-public record QuestDto(Guid Id, string Name, StatType StatType, Difficulty Difficulty, QuestType QuestType, decimal? TargetValue, decimal? Step, string? Unit, int SortOrder, Guid? GoalId);
+/// <param name="Rewards">本次請求的獎勵；只有 POST／PUT /quests 帶，清單中為 null 並從 JSON 省略。</param>
+public record QuestDto(
+    Guid Id,
+    string Name,
+    StatType StatType,
+    Difficulty Difficulty,
+    QuestType QuestType,
+    decimal? TargetValue,
+    decimal? Step,
+    string? Unit,
+    int SortOrder,
+    Guid? GoalId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RewardsDto? Rewards = null);
 
 /// <summary>任務排序請求。</summary>
 /// <param name="QuestIds">依新順序排列的全部未封存任務 ID。</param>

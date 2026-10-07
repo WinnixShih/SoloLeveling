@@ -29,6 +29,9 @@ public class Goal
     /// <summary>封存時間（UTC）。</summary>
     public DateTimeOffset? ArchivedAt { get; set; }
 
+    /// <summary>完成時間（UTC）：所有未封存任務都在最後一階達標過時寫入，之後不再清除；用來保證 A 級寶箱只發一次。</summary>
+    public DateTimeOffset? CompletedAt { get; set; }
+
     /// <summary>建立時間（UTC）。</summary>
     public DateTimeOffset CreatedAt { get; set; }
 }

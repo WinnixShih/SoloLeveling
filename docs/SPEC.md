@@ -13,7 +13,7 @@
 - Docker Compose 一鍵啟動（api + postgres）。
 - 註冊後由引導流程依固定類別產生漸進式任務。
 
-不做：推播、好友、排名、卡片、專注計時器、iOS/Android 原生 App、付費、AI 產生計畫。
+不做：推播、好友、排名、專注計時器、iOS/Android 原生 App、付費、AI 產生計畫。獎勵系統（寶箱、卡片、金幣、連勝保險、稱號、主題）見 4.12。
 
 ## 2. 技術堆疊（固定）
 
@@ -114,7 +114,7 @@ Limit,實際量 (null 表示未填),value != null && value <= TargetValue
 
 ### 4.6 連續紀錄
 
-- `Player.Streak` 只在結算時變動：已結算的日子 IsCleared → +1，否則歸零。
+- `Player.Streak` 只在結算時變動：已結算的日子 IsCleared → +1，否則歸零（連勝進行中且持有保險卡時改為消耗 1 張並 +1，見 4.12 與第 7 節）。
 - API 回傳的 `displayStreak = Streak + (今日 IsCleared ? 1 : 0)`。
 - `BestStreak = max(BestStreak, displayStreak)` 在結算與進度更新時維護。
 
@@ -200,6 +200,38 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 
 目標的 `IsArchived` 為 true 時連帶封存其未封存的任務；已結算的日子的達標率不變。漸進任務的目標欄位（`targetValue` 等）不可編輯，要改就封存目標重建。
 
+### 4.12 獎勵系統（寶箱、卡片、金幣、連勝保險、稱號、主題）
+
+獎勵只跟努力綁定，不能用金幣換 EXP、等級或連勝天數。
+
+**寶箱**（建立時未開啟，使用者手動開）
+
+| 觸發 | 寶箱 | 判定 |
+| --- | --- | --- |
+| 每升 1 級 | E | 只對超過 `Player.PeakLevel` 的等級發，撤銷降級後再升回來不重發 |
+| 階級晉升 | C，另送 1 張保險卡（上限 3） | 新等級與前一級的 `RankOf` 不同 |
+| 最佳連續達 7 天 | C | 成就「不屈」首次解鎖時 |
+| 最佳連續達 30 天 | A | 成就「恆心」首次解鎖時 |
+| 目標完成 | A | 目標每個未封存任務的達標天數（含今天）≥ `(StageCount − 1) × DaysPerStep + 1`，且目標期間（`LengthDays`）已走完（今天 − `StartDate` + 1 ≥ `LengthDays`）；本版之前建立、已符合條件的目標，會在使用者下一次請求時補發 A 箱；寫入 `Goal.CompletedAt` 後不再判定 |
+| 66 天週期完成 | S | `POST /program/restart` 時 `today − StartDate ≥ LengthDays`，寫入 `Program.CompletedAt` |
+| 金幣購買 | E | 200 金幣 |
+
+**開箱**：從該等級全部卡片均勻抽一張（含已擁有）；未擁有加入收藏，已擁有張數 +1 並轉成重複金幣；另附開箱金幣。E 20／30、C 50／80、A 100／200、S 300／500（開箱／重複）。亂數來源注入。
+
+**卡片**：目錄在 `Cards.All`（E 10、C 8、A 5、S 2），`Image` 為 `cards/{id}.webp`；插畫規格 2:3、768×1152、WebP 或 PNG、不含邊框與文字，檔案不存在時前端顯示佔位卡。
+
+**金幣**（每次變動一筆 `CoinEvent`，經 `Wallet`）：今日首次達標 +10（`DailyLog.ClearCoinsGranted` 跟著 `BonusGranted`；退回達標時收回，最多扣到 0）；開箱與重複卡見上；解鎖成就 +50。商店：保險卡 100（最多持有 3）、E 級寶箱 200、主題紫影／翡翠各 500（藍光免費預設）。錯誤碼 `NotEnoughCoins`、`ShieldLimitReached`、`ThemeOwned`、`UnknownTheme`（皆 400）。
+
+**連勝保險卡**：結算時某天未達標、`Streak > 0` 且 `ShieldCount > 0` → 消耗 1 張、Streak +1、記一筆 `RewardEvent(ShieldUsed, date)`；困難模式懲罰照扣；補多天時逐日判定。事件在下一個套用獎勵的請求回報一次（`AnnouncedAt`）。
+
+**成就與稱號**：目錄在 `Achievements.All`（12 個），條件成立且未解鎖即解鎖（唯一主鍵擋重複），+50 金幣，解鎖一個字塊。任務角色由漸進任務推導：作息＋`TimeOfDay` → 就寢、作息＋`TimeOfDayEvening` → 起床、運動／閱讀／螢幕時間同名。分類連續天數＝未封存角色任務「到昨天為止連續完成天數，今天完成再 +1」；分類累計分鐘＝運動、閱讀任務（含已封存）所有進度值加總。稱號：`Player.TitlePrefixKey`／`TitleSuffixKey` 只能選已解鎖且槽位正確的字塊；有選 → 「前綴・後綴」（只選一邊顯示該邊），都沒選 → 階級稱號。
+
+**主題**：`Player.ThemeKey`（`azure`／`violet`／`jade`，預設 `azure`），已購買記在 `OwnedThemes`。
+
+**判定時機**：所有會改玩家狀態的端點（以及 `GET /today`、`GET /me`，因為結算可能已消耗保險卡或補上成就條件）在第一次 `SaveChanges` 之後呼叫一次 `RewardApplier`（內部執行 `Rewards.Evaluate`），結果寫入 DB 並放進回應的 `rewards` 欄位；排程結算不發寶箱，等下一次請求補判定。`GET /rewards` 只結算、不套用獎勵（套用會吃掉待公告的保險卡事件）；`GET /cards`、`GET /goals`、`GET /history` 不套用獎勵。
+
+**前端**：導覽第三格「檔案（HUNTER）」呈現狀態面板與稱號組合、金幣與保險卡、待開寶箱、成就、圖鑑與釘選卡；商店視窗有保險卡與 E 級寶箱兩項，主題在設定頁購買與切換。系統訊息依 `rewards` 依序顯示：升級 → 晉階 → 寶箱 → 成就 → 保險卡生效。
+
 ## 5. 資料模型（EF Core 實體）
 
 所有主鍵為 `Guid`（`uuid`），皆有 `CreatedAt`（`bigint`，Unix 毫秒）。所有時間戳欄位（`CreatedAt`、`ArchivedAt`、`SettledAt`、`OccurredAt`）同此規則；欄位註解須標明單位。
@@ -207,15 +239,21 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 | 實體 | 欄位（型別，約束） |
 | --- | --- |
 | User | Id；Email（citext，unique）；PasswordHash；DisplayName（≤ 40）；TimeZoneId（IANA，預設 `Asia/Taipei`） |
-| Player | UserId（PK，FK User）；Level int ≥ 1；Xp int ≥ 0；Str/Vit/Int/Wil/Spi int ≥ 0；HardMode bool；Streak int；BestStreak int；TotalCompleted int；LastSettledDate DateOnly nullable |
-| Program | Id；UserId（FK）；StartDate DateOnly；Cycle int；LengthDays int = 66；IsActive bool；每使用者同時只有一筆 IsActive = true（partial unique index） |
-| Goal | Id；UserId（FK）；Category enum（`Routine`／`Exercise`／`Reading`／`ScreenTime`）；Answers text（JSON）；LengthDays int；StartDate DateOnly；IsArchived bool；ArchivedAt bigint nullable；CreatedAt bigint |
+| Player | UserId（PK，FK User）；Level int ≥ 1；Xp int ≥ 0；Str/Vit/Int/Wil/Spi int ≥ 0；HardMode bool；Streak int；BestStreak int；TotalCompleted int；LastSettledDate DateOnly nullable；PeakLevel int（曾到達的最高等級）；Coins int ≥ 0；ShieldCount int 0–3；ThemeKey（≤ 16，預設 azure）；TitlePrefixKey／TitleSuffixKey（≤ 32）nullable；PinnedCardId（≤ 64）nullable |
+| Program | Id；UserId（FK）；StartDate DateOnly；Cycle int；LengthDays int = 66；IsActive bool；每使用者同時只有一筆 IsActive = true（partial unique index）；CompletedAt bigint nullable |
+| Goal | Id；UserId（FK）；Category enum（`Routine`／`Exercise`／`Reading`／`ScreenTime`）；Answers text（JSON）；LengthDays int；StartDate DateOnly；IsArchived bool；ArchivedAt bigint nullable；CompletedAt bigint nullable；CreatedAt bigint |
 | Quest | Id；UserId（FK）；GoalId Guid nullable（FK Goal，漸進任務才有值）；Name（≤ 60）；StatType enum；Difficulty enum；QuestType enum；TargetValue decimal(10,2) nullable；Step decimal(10,2) nullable；Unit（≤ 10）nullable；ValueKind enum nullable（`Number`／`TimeOfDay`／`TimeOfDayEvening`，漸進任務才有值；`TimeOfDayEvening` 供起床時間使用，編碼基準為 18:00）；StartValue decimal(10,2) nullable；EndValue decimal(10,2) nullable；StepValue decimal(10,2) nullable；StageCount int nullable；DaysPerStep int nullable；SortOrder int；IsArchived bool；ArchivedAt bigint nullable |
-| DailyLog | Id；UserId（FK）；Date DateOnly；unique(UserId, Date)；CompletionRatio decimal(5,4)；IsCleared bool；BonusGranted bool；Note text nullable；IsSettled bool；SettledAt bigint nullable |
+| DailyLog | Id；UserId（FK）；Date DateOnly；unique(UserId, Date)；CompletionRatio decimal(5,4)；IsCleared bool；BonusGranted bool；ClearCoinsGranted bool；Note text nullable；IsSettled bool；SettledAt bigint nullable |
 | QuestProgress | Id；DailyLogId（FK）；QuestId（FK）；unique(DailyLogId, QuestId)；Value decimal(10,2) nullable；IsDone bool；XpGranted int；StatGranted int；TargetSnapshot decimal(10,2) nullable |
 | XpEvent | Id；UserId（FK）；Amount int（可負）；Source enum {Quest, QuestUndo, DailyBonus, DailyBonusUndo, Penalty}；RefId Guid nullable；OccurredAt bigint |
+| RewardChest | Id；UserId（FK）；Rarity enum（E／C／A／S）；Source enum {LevelUp, RankUp, Streak7, Streak30, GoalCompleted, ProgramCompleted, Purchase}；CreatedAt bigint；OpenedAt bigint nullable；DroppedCardId（≤ 64）nullable；Coins int |
+| OwnedCard | PK (UserId, CardId)；Count int ≥ 1；FirstAcquiredAt bigint |
+| Achievement | PK (UserId, Key)；UnlockedAt bigint |
+| OwnedTheme | PK (UserId, ThemeKey) |
+| CoinEvent | Id；Seq bigint identity；UserId（FK）；Amount int（可負）；Source enum {DailyClear, DailyClearUndo, ChestOpen, DuplicateCard, Achievement, ShopShield, ShopChest, ShopTheme}；RefId Guid nullable；OccurredAt bigint |
+| RewardEvent | Id；UserId（FK）；Kind enum {ShieldUsed}；Date DateOnly；OccurredAt bigint；AnnouncedAt bigint nullable |
 
-索引：`XpEvent(UserId, OccurredAt)`、`Quest(UserId, IsArchived)`、`DailyLog(UserId, Date)`、`Goal(UserId, IsArchived)`、`Goal` 部分唯一索引 `(UserId, Category) WHERE IsArchived = false`。
+索引：`XpEvent(UserId, OccurredAt)`、`Quest(UserId, IsArchived)`、`DailyLog(UserId, Date)`、`Goal(UserId, IsArchived)`、`Goal` 部分唯一索引 `(UserId, Category) WHERE IsArchived = false`、`RewardChest(UserId, OpenedAt)`、`CoinEvent(UserId, OccurredAt)`、`RewardEvent(UserId, AnnouncedAt)`。
 
 ## 6. API 規格
 
@@ -225,24 +263,33 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 | --- | --- | --- | --- |
 | POST /auth/register | 註冊 | `{email, password, displayName, timeZoneId?}` | 201 `{token, user}`；建立 Player、Program；不再建立預設任務 |
 | POST /auth/login | 登入 | `{email, password}` | 200 `{token, user}`；失敗 401 |
-| GET /me | 玩家總覽 | — | `{user:{id, email, displayName, timeZoneId}, player:{level, xp, xpNeeded, rank, title, stats:{str,vit,int,wil,spi}, hardMode, displayStreak, bestStreak, totalCompleted}, program:{startDate, cycle, dayNumber, lengthDays, isCompleted}, needsOnboarding}` |
+| GET /me | 玩家總覽 | — | `{user:{id, email, displayName, timeZoneId}, player:{level, xp, xpNeeded, rank, title, stats:{str,vit,int,wil,spi}, hardMode, displayStreak, bestStreak, totalCompleted, rankTitle, coins, shieldCount, themeKey, pinnedCard}, program:{startDate, cycle, dayNumber, lengthDays, isCompleted}, needsOnboarding}`；title 為組合後稱號，rewards 見表後說明 |
 | PATCH /me | 更新設定 | `{displayName?, timeZoneId?, hardMode?}` | 200 同 GET /me；hardMode 變更觸發 4.5 |
 | GET /goals/categories | 目標類別定義 | — | 類別表與基本任務清單，前端畫表單用；`questions[].type` 為 `Time`／`Integer`／`Decimal` |
 | POST /goals/preview | 預覽目標產生的任務 | `{goals:[{category, answers}], basicQuestIndexes?}` | 不寫入，回每個目標的任務與階段摘要 |
 | POST /goals | 建立目標與任務 | `{goals:[{category, answers}], basicQuestIndexes?}` | 201；回 `GET /goals` 格式，其他欄位或同類別已有進行中的回 400/409 |
 | GET /goals | 目標清單 | — | `{goals:[{id, category, title, lengthDays, startDate, quests:[{id, name, stage, stageCount, targetLabel, isArchived}]}]}` |
-| DELETE /goals/{id} | 封存目標與其任務 | — | 204；重算今日達標率 |
+| DELETE /goals/{id} | 封存目標與其任務 | — | 200 `{rewards}`；重算今日達標率 |
 | GET /quests | 任務清單 | — | `[{id, name, statType, difficulty, questType, targetValue, step, unit, sortOrder, goalId?}]`，不含已封存 |
 | POST /quests | 新增 | `{name, statType, difficulty, questType, targetValue?, step?, unit?}` | 201 任務；Count/Limit 缺 targetValue 回 400 |
 | PUT /quests/{id} | 修改 | 同 POST | 200 任務；漸進任務只允許改 statType、difficulty，其他回 400 `ProgressionQuestLocked`；套用 4.9 |
-| DELETE /quests/{id} | 封存 | — | 204；漸進任務可單獨封存 |
+| DELETE /quests/{id} | 封存 | — | 200 `{rewards}`；漸進任務可單獨封存 |
 | PUT /quests/reorder | 排序 | `{questIds:[...]}` | 204 |
 | GET /today | 今日任務與進度 | — | `{date, completionRatio, isCleared, threshold, bonusGranted, note, quests:[{...任務欄位, value, isDone, xpReward, statReward, progression?}]}` |
 | PUT /today/quests/{id}/progress | 寫入進度 | `{value: number 或 null}` | 200 同 GET /today；Check 類型只接受 0 或 1；Count 負值回 400 |
 | PUT /today/note | 今日反思 | `{note}`（≤ 2000 字） | 204 |
 | GET /history?from=YYYY-MM-DD&to=YYYY-MM-DD | 每日紀錄 | 區間 ≤ 100 天 | `[{date, completionRatio, isCleared, doneQuestIds:[...], note}]`，含今日的即時值 |
 | GET /xp-events?limit=50 | EXP 流水 | — | `[{amount, source, refId, occurredAt}]`，新到舊 |
-| POST /program/restart | 開新 66 天 | — | 200 program |
+| POST /program/restart | 開新 66 天 | — | 200 program（`rewards` 在 program 物件內） |
+| GET /rewards | 獎勵總覽 | — | `{coins, shieldCount, unopenedChests, achievements:[{key, name, condition, titleText, slot, unlocked, progress, target, unlockedAt}], titleFragments, titlePrefixKey, titleSuffixKey, title, pinnedCard, themeKey, ownedThemes}` |
+| POST /rewards/chests/{id}/open | 開箱 | — | `{card, isDuplicate, coins, coinBalance, rewards}`；已開或別人的寶箱 404 `ChestNotFound` |
+| GET /cards | 圖鑑 | — | `{cards:[{id, name, rarity, flavor, image, owned, count, firstAcquiredAt}], ownedKinds, total}` |
+| POST /shop/purchase | 商店 | `{item: "Shield"｜"EChest"｜"Theme", themeKey?}` | `{coins, shieldCount, ownedThemes, chest, rewards}`；400 `NotEnoughCoins`／`ShieldLimitReached`／`ThemeOwned`／`UnknownTheme` |
+| PUT /me/title | 稱號組合 | `{prefixKey, suffixKey}` | 200 同 GET /me；400 `TitleNotUnlocked` |
+| PUT /me/pinned-card | 釘選卡 | `{cardId｜null}` | 200 同 GET /me；400 `CardNotOwned` |
+| PUT /me/theme | 切換主題 | `{themeKey}` | 200 同 GET /me；400 `ThemeNotOwned` |
+
+`GET /today`、`PUT /today/quests/{id}/progress`、`POST/PUT /quests`、`DELETE /quests/{id}`、`POST /goals`、`DELETE /goals/{id}`、`GET/PATCH /me`、`PUT /me/*`、`POST /program/restart`（`rewards` 在回應的 `program` 物件內）的回應帶 `rewards`：`{levelsGained, rankUps, newChests, newAchievements, coinDelta, shieldsGained, shieldsUsed, shieldCount}`；`POST /rewards/chests/{id}/open` 與 `POST /shop/purchase` 的回應也帶；清單與 `GET /goals` 不帶此欄位。
 
 ## 7. 結算演算法
 
@@ -259,8 +306,12 @@ Settle(userId, now):
           log.IsCleared = log.CompletionRatio >= Threshold(player.HardMode)
           if log.IsCleared: player.Streak += 1
           else:
-              player.Streak = 0
-              if player.HardMode && penaltiesApplied < 3:
+              if player.ShieldCount > 0 && player.Streak > 0:
+                  player.ShieldCount -= 1; player.Streak += 1
+                  加入 RewardEvent(ShieldUsed, date)        // 下一個套用獎勵的請求回報
+              else:
+                  player.Streak = 0
+              if player.HardMode && penaltiesApplied < 3:   // 用了保險卡也照扣
                   penalty = round(XpNeeded(player.Level) * 0.15)
                   加入 XpEvent(Penalty, -penalty, RefId = log.Id)
                   player.Xp = max(0, player.Xp - penalty)
@@ -276,13 +327,14 @@ Settle(userId, now):
 
 ## 8. 前端（第一階段）
 
-做五個畫面，行動優先，純 HTML + JS，放在 `src/SoloLeveling.Api/wwwroot`：
+做六個畫面，行動優先，純 HTML + JS，放在 `src/SoloLeveling.Api/wwwroot`：
 
 1. 登入／註冊。
 2. 引導（新帳號）：三步流程，(1) 勾選要建立的目標類別（至少一個、多個且同類別最多一個）；(2) 逐類別填表，表單依 GET /goals/categories 產生，`time` 用 `<input type="time">`；(3) 預覽呼叫 POST /goals/preview，顯示每個任務的起終點、階數、每階變化，下方列基本任務勾選清單（被取代的預設不勾且停用）。確認呼叫 POST /goals 後進入今日畫面。
 3. 今日：漸進任務名字含當天 EffectiveTarget，右側小字「第 1／10 階」；其他不變。
 4. 進度：66 格日曆（GET /history 自 program.startDate 起 66 天），五維屬性數值，最近 7 天各任務完成點。
-5. 設定：困難模式開關、任務新增／編輯（漸進任務不在一般任務清單中，目標區塊只提供封存）；新增「目標」區塊列未封存目標（含類別、開始日、各任務階段），每個目標有「封存」（二次確認）；「新增目標」按鈕進只做一個類別的引導流程（類別選單排除已有進行中的）；開新 66 天。
+5. 檔案（HUNTER）：狀態面板與稱號組合、金幣與保險卡、待開寶箱、成就、圖鑑與釘選卡；商店視窗賣保險卡與 E 級寶箱，另有前往設定頁買主題的連結。
+6. 設定：困難模式開關、任務新增／編輯（漸進任務不在一般任務清單中，目標區塊只提供封存）；新增「目標」區塊列未封存目標（含類別、開始日、各任務階段），每個目標有「封存」（二次確認）；「新增目標」按鈕進只做一個類別的引導流程（類別選單排除已有進行中的）；開新 66 天。
 
 ## 9. 測試要求（最少）
 
@@ -321,6 +373,10 @@ Settle(userId, now):
 - [ ] 勾完 7 個任務（70%）在一般模式看到 isCleared = true 與 +30 EXP 事件。
 - [ ] 把系統時間往後撥一天再呼叫 GET /today，前一天出現在 /history 且 displayStreak 正確。
 - [ ] 困難模式下漏一天，XpEvent 出現一筆 Penalty，Level 不變。
+- [ ] 新帳號從 Lv.1 升到 Lv.2 時看到「等級提升」與「獲得 E 級寶箱」兩則系統訊息，檔案頁可開箱並在圖鑑看到卡片。
+- [ ] 漏一天且持有保險卡時，隔天連勝不中斷並看到保險生效訊息。
+- [ ] 用金幣買到紫影後可切換，介面整體換色。
+- [ ] 稱號可組合成「靜夜的・百戰獵人」並顯示在狀態面板。
 - [ ] 所有測試綠燈；`dotnet format` 無警告。
 
 ## 12. 禁止事項
@@ -329,7 +385,7 @@ Settle(userId, now):
 - 不要直接修改 Player.Xp 而不寫 XpEvent。
 - 不要硬刪 Quest 或 DailyLog。
 - 不要用本機時間或伺服器時區判斷「今日」。
-- 不要新增本文未列的功能；有想法寫進 README 的「後續」段落。
+- 不要新增本文未列的功能（已列於 4.12 的除外）；有想法寫進 README 的「後續」段落。
 
 ## 13. 開發流程
 

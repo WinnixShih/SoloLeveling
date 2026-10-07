@@ -9,7 +9,8 @@ namespace SoloLeveling.Domain.Rules;
 /// <param name="TodayLog">今日紀錄（可能是既有的或這次新建的）。</param>
 /// <param name="NewLogs">這次新建的 <see cref="DailyLog"/>（含補建的缺席日與今日）。</param>
 /// <param name="Events">這次產生的 EXP 事件（只會有 Penalty）。</param>
-public record SettlementResult(DateOnly Today, DailyLog TodayLog, IReadOnlyList<DailyLog> NewLogs, IReadOnlyList<XpEvent> Events);
+/// <param name="ShieldsUsed">這次消耗保險卡保護的日期，由舊到新；呼叫端據此寫 <c>RewardEvent</c>。</param>
+public record SettlementResult(DateOnly Today, DailyLog TodayLog, IReadOnlyList<DailyLog> NewLogs, IReadOnlyList<XpEvent> Events, IReadOnlyList<DateOnly> ShieldsUsed);
 
 /// <summary>
 /// 結算演算法（規格第 7 節）的純規則部分：把 [start, today) 的每一天轉成已結算的 <see cref="DailyLog"/>，更新 Streak 與懲罰。
@@ -26,7 +27,7 @@ public static class Settlement
     /// <summary>
     /// 執行結算。
     /// </summary>
-    /// <param name="player">玩家；Streak、BestStreak、Xp、LastSettledDate 會被更新。</param>
+    /// <param name="player">玩家；Streak、BestStreak、Xp、ShieldCount、LastSettledDate 會被更新。未達標日若連勝進行中且持有保險卡，消耗 1 張讓連勝延續（困難模式懲罰照扣）。</param>
     /// <param name="timeZoneId">使用者的 IANA 時區 ID。</param>
     /// <param name="existingLogs">該使用者已存在的紀錄（至少要涵蓋待結算區間與今日）。</param>
     /// <param name="now">當下時間（UTC）。</param>
@@ -37,6 +38,7 @@ public static class Settlement
         var logsByDate = existingLogs.ToDictionary(l => l.Date);
         var newLogs = new List<DailyLog>();
         var events = new List<XpEvent>();
+        var shieldsUsed = new List<DateOnly>();
 
         var start = player.LastSettledDate is { } last
             ? last.AddDays(1)
@@ -71,7 +73,18 @@ public static class Settlement
             }
             else
             {
-                player.Streak = 0;
+                // 保險卡只保護進行中的連勝；Streak 為 0 時沒有東西可保護，不消耗
+                if (player.ShieldCount > 0 && player.Streak > 0)
+                {
+                    player.ShieldCount -= 1;
+                    player.Streak += 1;
+                    shieldsUsed.Add(date);
+                }
+                else
+                {
+                    player.Streak = 0;
+                }
+
                 if (player.HardMode && penaltiesApplied < MaxPenaltiesPerSettlement)
                 {
                     var penalty = CompletionRules.PenaltyOf(player.Level);
@@ -107,7 +120,7 @@ public static class Settlement
             newLogs.Add(todayLog);
         }
 
-        return new SettlementResult(today, todayLog, newLogs, events);
+        return new SettlementResult(today, todayLog, newLogs, events, shieldsUsed);
     }
 
     private static DailyLog NewLog(Guid userId, DateOnly date, DateTimeOffset now)

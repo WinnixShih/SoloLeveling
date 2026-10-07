@@ -104,3 +104,135 @@ public enum ProgressionValueKind
     /// <summary>一天中的時間點，以 18:00 為基準，供起床時間使用（見 <c>TimeOfDay</c>）。</summary>
     TimeOfDayEvening = 3,
 }
+
+/// <summary>
+/// 卡片稀有度，也是寶箱等級；兩者一對一（E 級寶箱只開出 E 級卡）。
+/// </summary>
+public enum Rarity
+{
+    /// <summary>E 級。</summary>
+    E = 1,
+
+    /// <summary>C 級。</summary>
+    C = 2,
+
+    /// <summary>A 級。</summary>
+    A = 3,
+
+    /// <summary>S 級。</summary>
+    S = 4,
+}
+
+/// <summary>
+/// 寶箱的取得來源。
+/// </summary>
+public enum ChestSource
+{
+    /// <summary>升 1 級（E）。</summary>
+    LevelUp = 1,
+
+    /// <summary>階級晉升（C）。</summary>
+    RankUp = 2,
+
+    /// <summary>最佳連續首次達 7 天（C）。</summary>
+    Streak7 = 3,
+
+    /// <summary>最佳連續首次達 30 天（A）。</summary>
+    Streak30 = 4,
+
+    /// <summary>目標完成（A）。</summary>
+    GoalCompleted = 5,
+
+    /// <summary>66 天週期完成（S）。</summary>
+    ProgramCompleted = 6,
+
+    /// <summary>商店購買（E）。</summary>
+    Purchase = 7,
+}
+
+/// <summary>
+/// 金幣流水的來源。
+/// </summary>
+public enum CoinSource
+{
+    /// <summary>今日首次達標。</summary>
+    DailyClear = 1,
+
+    /// <summary>收回今日達標金幣。</summary>
+    DailyClearUndo = 2,
+
+    /// <summary>開箱固定金幣。</summary>
+    ChestOpen = 3,
+
+    /// <summary>重複卡轉換。</summary>
+    DuplicateCard = 4,
+
+    /// <summary>解鎖成就。</summary>
+    Achievement = 5,
+
+    /// <summary>購買連勝保險卡。</summary>
+    ShopShield = 6,
+
+    /// <summary>購買 E 級寶箱。</summary>
+    ShopChest = 7,
+
+    /// <summary>購買主題。</summary>
+    ShopTheme = 8,
+}
+
+/// <summary>
+/// 獎勵相關事件的種類。
+/// </summary>
+public enum RewardEventKind
+{
+    /// <summary>結算時自動消耗 1 張連勝保險卡。</summary>
+    ShieldUsed = 1,
+}
+
+/// <summary>
+/// 稱號字塊的位置。
+/// </summary>
+public enum TitleSlot
+{
+    /// <summary>前綴（例：靜夜的）。</summary>
+    Prefix = 1,
+
+    /// <summary>後綴（例：百戰獵人）。</summary>
+    Suffix = 2,
+}
+
+/// <summary>
+/// 由漸進任務推導出的角色，供分類成就使用；一般任務沒有角色。
+/// </summary>
+public enum QuestRole
+{
+    /// <summary>就寢（作息、<see cref="ProgressionValueKind.TimeOfDay"/>）。</summary>
+    Bedtime = 1,
+
+    /// <summary>起床（作息、<see cref="ProgressionValueKind.TimeOfDayEvening"/>）。</summary>
+    WakeUp = 2,
+
+    /// <summary>運動。</summary>
+    Exercise = 3,
+
+    /// <summary>閱讀。</summary>
+    Reading = 4,
+
+    /// <summary>螢幕時間。</summary>
+    ScreenTime = 5,
+}
+
+/// <summary>
+/// 商店商品。
+/// </summary>
+public enum ShopItem
+{
+    /// <summary>連勝保險卡。</summary>
+    Shield = 1,
+
+    /// <summary>E 級寶箱。</summary>
+    EChest = 2,
+
+    /// <summary>主題色（需指定 themeKey）。</summary>
+    Theme = 3,
+}

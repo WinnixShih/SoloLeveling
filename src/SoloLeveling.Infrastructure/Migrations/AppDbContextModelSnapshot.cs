@@ -23,6 +23,59 @@ namespace SoloLeveling.Infrastructure.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "citext");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.Achievement", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<long>("UnlockedAt")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("UserId", "Key");
+
+                    b.ToTable("Achievements");
+                });
+
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.CoinEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Amount")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("OccurredAt")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("RefId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Seq")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Seq"));
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "OccurredAt");
+
+                    b.ToTable("CoinEvents");
+                });
+
             modelBuilder.Entity("SoloLeveling.Domain.Entities.DailyLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -30,6 +83,9 @@ namespace SoloLeveling.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<bool>("BonusGranted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ClearCoinsGranted")
                         .HasColumnType("boolean");
 
                     b.Property<decimal>("CompletionRatio")
@@ -83,6 +139,9 @@ namespace SoloLeveling.Infrastructure.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
+                    b.Property<long?>("CompletedAt")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("CreatedAt")
                         .HasColumnType("bigint");
 
@@ -109,12 +168,49 @@ namespace SoloLeveling.Infrastructure.Migrations
                     b.ToTable("Goals");
                 });
 
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.OwnedCard", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CardId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("FirstAcquiredAt")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("UserId", "CardId");
+
+                    b.ToTable("OwnedCards");
+                });
+
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.OwnedTheme", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ThemeKey")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("UserId", "ThemeKey");
+
+                    b.ToTable("OwnedThemes");
+                });
+
             modelBuilder.Entity("SoloLeveling.Domain.Entities.Player", b =>
                 {
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("BestStreak")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Coins")
                         .HasColumnType("integer");
 
                     b.Property<long>("CreatedAt")
@@ -132,6 +228,16 @@ namespace SoloLeveling.Infrastructure.Migrations
                     b.Property<int>("Level")
                         .HasColumnType("integer");
 
+                    b.Property<int>("PeakLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PinnedCardId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("ShieldCount")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Spi")
                         .HasColumnType("integer");
 
@@ -140,6 +246,19 @@ namespace SoloLeveling.Infrastructure.Migrations
 
                     b.Property<int>("Streak")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ThemeKey")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("TitlePrefixKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TitleSuffixKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<int>("TotalCompleted")
                         .HasColumnType("integer");
@@ -163,6 +282,9 @@ namespace SoloLeveling.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<long?>("CompletedAt")
+                        .HasColumnType("bigint");
 
                     b.Property<long>("CreatedAt")
                         .HasColumnType("bigint");
@@ -320,6 +442,75 @@ namespace SoloLeveling.Infrastructure.Migrations
                     b.ToTable("QuestProgresses");
                 });
 
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.RewardChest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Coins")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("DroppedCardId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long?>("OpenedAt")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Rarity")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "OpenedAt");
+
+                    b.ToTable("RewardChests");
+                });
+
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.RewardEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("AnnouncedAt")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<long>("OccurredAt")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "AnnouncedAt");
+
+                    b.ToTable("RewardEvents");
+                });
+
             modelBuilder.Entity("SoloLeveling.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -391,6 +582,24 @@ namespace SoloLeveling.Infrastructure.Migrations
                     b.ToTable("XpEvents");
                 });
 
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.Achievement", b =>
+                {
+                    b.HasOne("SoloLeveling.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.CoinEvent", b =>
+                {
+                    b.HasOne("SoloLeveling.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SoloLeveling.Domain.Entities.DailyLog", b =>
                 {
                     b.HasOne("SoloLeveling.Domain.Entities.User", null)
@@ -401,6 +610,24 @@ namespace SoloLeveling.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("SoloLeveling.Domain.Entities.Goal", b =>
+                {
+                    b.HasOne("SoloLeveling.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.OwnedCard", b =>
+                {
+                    b.HasOne("SoloLeveling.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.OwnedTheme", b =>
                 {
                     b.HasOne("SoloLeveling.Domain.Entities.User", null)
                         .WithMany()
@@ -451,6 +678,24 @@ namespace SoloLeveling.Infrastructure.Migrations
                     b.HasOne("SoloLeveling.Domain.Entities.Quest", null)
                         .WithMany()
                         .HasForeignKey("QuestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.RewardChest", b =>
+                {
+                    b.HasOne("SoloLeveling.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.RewardEvent", b =>
+                {
+                    b.HasOne("SoloLeveling.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

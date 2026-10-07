@@ -78,13 +78,12 @@ public class QuestsController(QuestService quests) : ControllerBase
     /// </summary>
     /// <param name="id">任務 ID。</param>
     /// <param name="ct">取消權杖。</param>
-    /// <returns>204。</returns>
+    /// <returns>200 與本次獎勵。</returns>
     [HttpDelete("{id:guid}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<RewardsEnvelope>(StatusCodes.Status200OK)]
     [ProducesResponseType<ErrorResponse>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Archive(Guid id, CancellationToken ct)
+    public async Task<ActionResult<RewardsEnvelope>> Archive(Guid id, CancellationToken ct)
     {
-        await quests.ArchiveAsync(User.GetUserId(), id, ct);
-        return NoContent();
+        return new RewardsEnvelope(await quests.ArchiveAsync(User.GetUserId(), id, ct));
     }
 }

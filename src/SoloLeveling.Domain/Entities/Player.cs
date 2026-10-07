@@ -41,6 +41,27 @@ public class Player
     /// <summary>累計完成任務次數；撤銷完成時會減回。</summary>
     public int TotalCompleted { get; set; }
 
+    /// <summary>曾到達的最高等級；升級寶箱與晉階獎勵只對超過此值的等級發放，撤銷降級後再升回來不重複發。</summary>
+    public int PeakLevel { get; set; } = 1;
+
+    /// <summary>金幣餘額，永遠 &gt;= 0；每次變動都必須對應一筆 <see cref="CoinEvent"/>（經 <c>Wallet</c>）。</summary>
+    public int Coins { get; set; }
+
+    /// <summary>連勝保險卡張數（0 到 <c>Shop.MaxShields</c>）；結算遇到未達標日且連勝進行中時自動消耗。</summary>
+    public int ShieldCount { get; set; }
+
+    /// <summary>目前主題鍵（azure／violet／jade）。</summary>
+    public string ThemeKey { get; set; } = Themes.Default;
+
+    /// <summary>稱號前綴字塊（成就鍵）；null 表示不選。</summary>
+    public string? TitlePrefixKey { get; set; }
+
+    /// <summary>稱號後綴字塊（成就鍵）；null 表示不選。</summary>
+    public string? TitleSuffixKey { get; set; }
+
+    /// <summary>釘選展示的卡片 ID；null 表示不釘選。</summary>
+    public string? PinnedCardId { get; set; }
+
     /// <summary>最後一個已結算的日期（使用者時區）；null 表示尚未結算過。</summary>
     public DateOnly? LastSettledDate { get; set; }
 
