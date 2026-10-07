@@ -3,10 +3,12 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
 using SoloLeveling.Api.Services;
+using SoloLeveling.Infrastructure;
 
 namespace SoloLeveling.Api.Tests;
 
@@ -23,6 +25,11 @@ public sealed class ApiFactory(string connectionString, string environment = "De
     /// <summary>抽卡亂數；預設永遠抽該等級的第一張卡，測試可改 <see cref="FixedRandom.Value"/>。</summary>
     public FixedRandom Rng { get; } = new();
 
+    /// <summary>記錄經 EF 送出的 SQL，供測試判斷某段查詢是否執行過。</summary>
+    public SqlRecorder Sql { get; } = new();
+
+    private readonly Dictionary<HttpClient, (string Email, DateTimeOffset IssuedAt)> _sessions = [];
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(environment);
@@ -32,6 +39,7 @@ public sealed class ApiFactory(string connectionString, string environment = "De
         {
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
+            services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(Sql));
             services.RemoveAll<Random>();
             services.AddSingleton<Random>(Rng);
             // 排程結算不在測試 host 內背景執行，避免跟測試本身的結算互相干擾；排程邏輯另有專屬測試
@@ -47,9 +55,10 @@ public sealed class ApiFactory(string connectionString, string environment = "De
     public async Task<HttpClient> RegisterAsync(string timeZoneId = "UTC", bool seedBasicQuests = true)
     {
         var client = CreateClient();
+        var email = $"{Guid.NewGuid():N}@test.local";
         var response = await client.PostAsJsonAsync("/api/v1/auth/register", new
         {
-            email = $"{Guid.NewGuid():N}@test.local",
+            email,
             password = "password123",
             displayName = "tester",
             timeZoneId,
@@ -57,6 +66,7 @@ public sealed class ApiFactory(string connectionString, string environment = "De
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", body.GetProperty("token").GetString());
+        _sessions[client] = (email, Clock.GetUtcNow());
         if (seedBasicQuests)
         {
             var seeded = await client.PostAsJsonAsync("/api/v1/goals", new { goals = Array.Empty<object>(), basicQuestIndexes = Enumerable.Range(0, 9).ToArray() });
@@ -64,5 +74,24 @@ public sealed class ApiFactory(string connectionString, string environment = "De
         }
 
         return client;
+    }
+
+    /// <summary>
+    /// 撥動假時鐘；權杖有效 7 天，撥超過 3 天後重新登入換發，讓長天數情境的 client 不會因權杖過期而 401。
+    /// </summary>
+    public async Task AdvanceAsync(HttpClient client, TimeSpan span)
+    {
+        Clock.Advance(span);
+        var session = _sessions[client];
+        if (Clock.GetUtcNow() - session.IssuedAt < TimeSpan.FromDays(3))
+        {
+            return;
+        }
+
+        var response = await CreateClient().PostAsJsonAsync("/api/v1/auth/login", new { email = session.Email, password = "password123" });
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", body.GetProperty("token").GetString());
+        _sessions[client] = (session.Email, Clock.GetUtcNow());
     }
 }

@@ -199,12 +199,12 @@
 
   /* ---------- 釘選卡小圖 ---------- */
 
-  // 狀態面板名稱旁的釘選卡小圖；圖檔不存在時只剩稀有度色框
+  // 狀態面板名稱旁的釘選卡小圖；圖檔不存在時 img 被移除，底下的稀有度色塊與字母當佔位
   function pinnedThumb(card) {
     if (!card) {
       return '';
     }
-    return `<span class="pinned-thumb rarity-${h(card.rarity)}" title="${h(card.name)}"><img src="${h(card.image)}" alt="" onerror="this.remove()"></span>`;
+    return `<span class="pinned-thumb rarity-${h(card.rarity)}" title="${h(card.name)}"><span class="pinned-thumb-letter">${h(card.rarity)}</span><img src="${h(card.image)}" alt="" onerror="this.remove()"></span>`;
   }
 
   /* ---------- 二段式確認 ---------- */

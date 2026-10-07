@@ -10,7 +10,8 @@ namespace SoloLeveling.Domain.Rules;
 /// <param name="NewLogs">這次新建的 <see cref="DailyLog"/>（含補建的缺席日與今日）。</param>
 /// <param name="Events">這次產生的 EXP 事件（只會有 Penalty）。</param>
 /// <param name="ShieldsUsed">這次消耗保險卡保護的日期，由舊到新；呼叫端據此寫 <c>RewardEvent</c>。</param>
-public record SettlementResult(DateOnly Today, DailyLog TodayLog, IReadOnlyList<DailyLog> NewLogs, IReadOnlyList<XpEvent> Events, IReadOnlyList<DateOnly> ShieldsUsed);
+/// <param name="SettledDays">本次新結算的日數；0 代表這次沒有結算任何一天（已結算過的日子不重複計）。</param>
+public record SettlementResult(DateOnly Today, DailyLog TodayLog, IReadOnlyList<DailyLog> NewLogs, IReadOnlyList<XpEvent> Events, IReadOnlyList<DateOnly> ShieldsUsed, int SettledDays);
 
 /// <summary>
 /// 結算演算法（規格第 7 節）的純規則部分：把 [start, today) 的每一天轉成已結算的 <see cref="DailyLog"/>，更新 Streak 與懲罰。
@@ -51,6 +52,7 @@ public static class Settlement
         }
 
         var penaltiesApplied = 0;
+        var settledDays = 0;
         for (var date = start; date < today; date = date.AddDays(1))
         {
             if (!logsByDate.TryGetValue(date, out var log))
@@ -105,6 +107,7 @@ public static class Settlement
             player.BestStreak = Math.Max(player.BestStreak, player.Streak);
             log.IsSettled = true;
             log.SettledAt = now;
+            settledDays += 1;
         }
 
         var yesterday = today.AddDays(-1);
@@ -120,7 +123,7 @@ public static class Settlement
             newLogs.Add(todayLog);
         }
 
-        return new SettlementResult(today, todayLog, newLogs, events, shieldsUsed);
+        return new SettlementResult(today, todayLog, newLogs, events, shieldsUsed, settledDays);
     }
 
     private static DailyLog NewLog(Guid userId, DateOnly date, DateTimeOffset now)

@@ -28,8 +28,8 @@ public class TodayService(AppDbContext db, TodayContextLoader loader, RewardAppl
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var context = await loader.LoadAsync(userId, ct);
-        // 結算可能消耗了保險卡，也可能補解鎖排程造成的成就，GET 也套用一次
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
+        // 結算可能消耗了保險卡或讓連勝達標；沒有新結算時略過統計查詢
+        var rewards = await rewardApplier.ApplyOnReadAsync(context, ct);
         await tx.CommitAsync(ct);
         return Build(context) with { Rewards = rewards };
     }

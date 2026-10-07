@@ -51,7 +51,7 @@ builder.Services
 // 驗證金鑰與簽發端（JwtTokenService）同樣取自 AppOptions，共用同一套啟動驗證
 builder.Services
     .AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
-    .Configure<IOptions<AppOptions>>((options, appOptions) =>
+    .Configure<IOptions<AppOptions>, TimeProvider>((options, appOptions, clock) =>
     {
         var secret = appOptions.Value.JwtSecret;
         options.MapInboundClaims = false;
@@ -62,6 +62,19 @@ builder.Services
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
             ClockSkew = TimeSpan.FromMinutes(1),
+            ValidateLifetime = true,
+            // 預設驗證用系統時鐘；改用注入的 TimeProvider，簽發與驗證才同一個時間來源（測試撥假時間也一致）
+            LifetimeValidator = (notBefore, expires, _, parameters) =>
+            {
+                if (expires is null)
+                {
+                    return false;
+                }
+
+                var now = clock.GetUtcNow().UtcDateTime;
+                return now <= expires.Value.Add(parameters.ClockSkew)
+                    && (notBefore is null || now >= notBefore.Value.Subtract(parameters.ClockSkew));
+            },
         };
         // 未驗證時也回統一的錯誤格式
         options.Events = new JwtBearerEvents

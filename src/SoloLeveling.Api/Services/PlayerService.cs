@@ -27,7 +27,7 @@ public class PlayerService(AppDbContext db, TodayContextLoader loader, RewardApp
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var context = await loader.LoadAsync(userId, ct);
-        return await SaveAndBuildAsync(context, tx, ct);
+        return await SaveAndBuildAsync(context, tx, true, ct);
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ public class PlayerService(AppDbContext db, TodayContextLoader loader, RewardApp
             db.XpEvents.AddRange(events);
         }
 
-        return await SaveAndBuildAsync(context, tx, ct);
+        return await SaveAndBuildAsync(context, tx, false, ct);
     }
 
     /// <summary>
@@ -85,7 +85,7 @@ public class PlayerService(AppDbContext db, TodayContextLoader loader, RewardApp
         EnsureFragment(request.SuffixKey, TitleSlot.Suffix, unlocked);
         context.Player.TitlePrefixKey = request.PrefixKey;
         context.Player.TitleSuffixKey = request.SuffixKey;
-        return await SaveAndBuildAsync(context, tx, ct);
+        return await SaveAndBuildAsync(context, tx, false, ct);
     }
 
     /// <summary>
@@ -106,7 +106,7 @@ public class PlayerService(AppDbContext db, TodayContextLoader loader, RewardApp
         }
 
         context.Player.PinnedCardId = request.CardId;
-        return await SaveAndBuildAsync(context, tx, ct);
+        return await SaveAndBuildAsync(context, tx, false, ct);
     }
 
     /// <summary>
@@ -129,7 +129,7 @@ public class PlayerService(AppDbContext db, TodayContextLoader loader, RewardApp
         }
 
         context.Player.ThemeKey = key;
-        return await SaveAndBuildAsync(context, tx, ct);
+        return await SaveAndBuildAsync(context, tx, false, ct);
     }
 
     /// <summary>
@@ -157,12 +157,15 @@ public class PlayerService(AppDbContext db, TodayContextLoader loader, RewardApp
     /// </summary>
     /// <param name="context">今日內容（已套用本次修改）。</param>
     /// <param name="tx">呼叫端開的交易。</param>
+    /// <param name="isRead">true 表示純讀取（GET /me），本日已判定過且無新結算時略過獎勵判定。</param>
     /// <param name="ct">取消權杖。</param>
     /// <returns>總覽（含本次獎勵）。</returns>
-    private async Task<MeResponse> SaveAndBuildAsync(TodayContext context, IDbContextTransaction tx, CancellationToken ct)
+    private async Task<MeResponse> SaveAndBuildAsync(TodayContext context, IDbContextTransaction tx, bool isRead, CancellationToken ct)
     {
         await db.SaveChangesAsync(ct);
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
+        var rewards = isRead
+            ? await rewardApplier.ApplyOnReadAsync(context, ct)
+            : await rewardApplier.ApplyAsync(context, 0, ct);
         var program = await db.Programs.AsNoTracking().SingleAsync(p => p.UserId == context.User.Id && p.IsActive, ct);
         await tx.CommitAsync(ct);
         return new MeResponse(

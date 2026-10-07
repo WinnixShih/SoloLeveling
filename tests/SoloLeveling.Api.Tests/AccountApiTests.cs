@@ -1,7 +1,12 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using FluentAssertions;
+using Microsoft.IdentityModel.Tokens;
 
 namespace SoloLeveling.Api.Tests;
 
@@ -89,6 +94,35 @@ public sealed class AccountApiTests(PostgresFixture fixture) : IDisposable
         client.DefaultRequestHeaders.Authorization = new("Bearer", token);
         var me = await client.GetAsync("/api/v1/me");
         me.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Token有效期以注入時鐘判定_未過期可用_過期後回401()
+    {
+        var client = await _factory.RegisterAsync(seedBasicQuests: false);
+
+        _factory.Clock.Advance(Auth.JwtTokenService.Lifetime - TimeSpan.FromHours(1));
+        var beforeExpiry = await client.GetAsync("/api/v1/me");
+        _factory.Clock.Advance(TimeSpan.FromHours(1) + TimeSpan.FromMinutes(2));
+        var afterExpiry = await client.GetAsync("/api/v1/me");
+
+        beforeExpiry.StatusCode.Should().Be(HttpStatusCode.OK);
+        afterExpiry.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Token沒有exp_回401()
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(ApiFactory.JwtSecret));
+        var token = new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
+            claims: [new Claim(JwtRegisteredClaimNames.Sub, Guid.NewGuid().ToString())],
+            signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256)));
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync("/api/v1/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]

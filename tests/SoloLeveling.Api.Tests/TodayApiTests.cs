@@ -41,6 +41,34 @@ public sealed class TodayApiTests(PostgresFixture fixture) : IDisposable
     }
 
     [Fact]
+    public async Task GetToday_當日無新結算_不跑獎勵統計但仍回rewards欄位()
+    {
+        var client = await _factory.RegisterAsync();
+        (await client.GetAsync("/api/v1/today")).EnsureSuccessStatusCode();
+        _factory.Sql.Clear();
+
+        var body = await client.GetFromJsonAsync<JsonElement>("/api/v1/today");
+        var me = await client.GetFromJsonAsync<JsonElement>("/api/v1/me");
+
+        _factory.Sql.Count("FROM \"Achievements\"").Should().Be(0);
+        body.GetProperty("rewards").GetProperty("newChests").GetArrayLength().Should().Be(0);
+        me.GetProperty("rewards").GetProperty("shieldsUsed").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetToday_跨日結算後_仍跑完整獎勵判定()
+    {
+        var client = await _factory.RegisterAsync();
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+        _factory.Sql.Clear();
+
+        var response = await client.GetAsync("/api/v1/today");
+
+        response.EnsureSuccessStatusCode();
+        _factory.Sql.Count("FROM \"Achievements\"").Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public async Task GetToday_新玩家_9個任務皆未完成()
     {
         var client = await _factory.RegisterAsync();

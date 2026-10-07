@@ -38,7 +38,7 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 
 - **Player.Xp 的任何變動都必須對應一筆 XpEvent。** Domain 規則方法（`ProgressUpdater`、`Settlement`、`Leveling`）只改記憶體中的實體並回傳事件，由 Api 服務層 `db.XpEvents.AddRange(...)` 持久化。直接呼叫 `Leveling.GainXp／LoseXp／ApplyPenalty` 時要自己補事件。
 - **Player.Coins 的任何變動都必須對應一筆 CoinEvent，一律經 `Wallet.Change`／`Wallet.Spend`。** 不要直接改 `Player.Coins`（測試種資料除外）。
-- **會改玩家狀態的端點在第一次 `SaveChangesAsync` 之後呼叫一次 `RewardApplier.ApplyAsync`，再 commit。** 它會查統計（要看得到本次修改）、寫寶箱／成就／金幣事件、回報保險卡事件並再存一次；回傳的 `RewardsDto` 放進回應的 `Rewards`。`GET /today`、`GET /me` 也要呼叫（結算可能消耗保險卡）；只讀的 `GET /rewards`（只結算）、`/cards`、`/goals`、`/history` 不呼叫，否則會吃掉待公告的保險卡事件。
+- **會改玩家狀態的端點在第一次 `SaveChangesAsync` 之後呼叫一次 `RewardApplier.ApplyAsync`，再 commit。** 它會查統計（要看得到本次修改）、寫寶箱／成就／金幣事件、回報保險卡事件並再存一次；回傳的 `RewardsDto` 放進回應的 `Rewards`。`GET /today`、`GET /me` 改呼叫 `ApplyOnReadAsync`（結算可能消耗保險卡）：本次結算新結算了日子、有待公告保險卡事件、或 `Player.RewardsEvaluatedDate` 不是今天時等同 `ApplyAsync`（因此每天至少完整判定一次），其餘略過統計與判定、回空獎勵；要封存目標／任務的端點須在封存前呼叫 `CompleteFinishedGoalsAsync` 並把結果傳給 `ApplyAsync` 的 `alreadyCompletedGoals`，否則走完期間當天封存會丟掉 A 箱；只讀的 `GET /rewards`（只結算）、`/cards`、`/goals`、`/history` 不呼叫，否則會吃掉待公告的保險卡事件。
 - **升級寶箱與晉階獎勵以 `Player.PeakLevel` 判定**，成就以「條件成立且未解鎖」判定；不要改成請求前後差，否則撤銷再完成可以刷寶箱。
 - **所有需要「今日」的端點都要先結算。** 服務層先 `db.Database.BeginTransactionAsync` → `TodayContextLoader.LoadAsync`（內部呼叫 `SettlementService.SettleAsync`，沿用呼叫端交易，以 `SELECT … FOR UPDATE` 鎖 Player 列）→ 修改 → `SaveChangesAsync` → `CommitAsync`。不需要今日的查詢（`QuestService.ListAsync`、`ReorderAsync`、`HistoryService.GetXpEventsAsync`）不結算。
 - **「今日」只能用 `UserClock.DateOf(now, user.TimeZoneId)` 決定。** 時間來源一律注入 `TimeProvider`（`clock.GetUtcNow()`），禁止直接用 `DateTime.Now`／`DateTime.UtcNow`。
@@ -54,7 +54,7 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 ## 已知陷阱
 
 - **導覽集合加入的新實體會被當成 Modified。** 透過 `log.Progresses.Add(...)` 加入且主鍵已設值的實體，EF 會當成既有資料，`SaveChanges` 丟 `DbUpdateConcurrencyException`。要明確 `db.QuestProgresses.AddRange(...)`（見 `TodayService.SetProgressAsync`：先記下既有 Id，再把新增的標成 Added）。
-- **JWT 不放 `nbf`。** IdentityModel 驗有效期用真實時鐘，測試用 `FakeTimeProvider` 簽發會被判「尚未生效」（`JwtTokenService.CreateToken`）。
+- **JWT 有效期驗證用注入的 `TimeProvider`。** `Program.cs` 以 `LifetimeValidator` 取代 IdentityModel 預設的系統時鐘，否則測試用 `FakeTimeProvider` 簽發的權杖會隨真實時間過期而 401；不要拿掉。
 - **同一請求內多筆 XpEvent 的 `OccurredAt` 相同**，`Seq`（DB identity）只保證排序穩定，不保證等於程式內建立順序；測試不要驗同一時間點內的先後。
 - **Programs 有 partial unique index（每人只能一筆 `IsActive = true`）。** 換週期要先把舊的設 false 並 `SaveChangesAsync`，再新增新的（見 `ProgramService.RestartAsync`）。
 - **呼叫 `TodayContextLoader.LoadAsync` 前一定要先開交易。** 沒開的話 `SettlementService` 會自己開交易並 commit，Player 列鎖在載入今日、套規則之前就釋放，後續修改不再受鎖保護。
@@ -85,6 +85,6 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 
 ## 目前狀態
 
-- MVP、引導式目標、系統介面改版、獎勵系統完成，測試全綠（321 個：Domain 236 + Api 85）。
+- MVP、引導式目標、系統介面改版、獎勵系統完成，測試全綠（340 個：Domain 244 + Api 96）。
 - GitHub 遠端 `origin` 是 `git@github.com:WinnixShih/SoloLeveling.git`，`main` 已 push 並追蹤 `origin/main`。
-- 待辦見 README「後續」：註冊 Email 唯一索引在極端併發下撞到會回 500（應改 409）、refresh token／登出即失效、前端離線暫存與 PWA 等。
+- 待辦見 README「後續」：refresh token／登出即失效、前端離線暫存與 PWA 等。
