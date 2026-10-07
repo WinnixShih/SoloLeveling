@@ -25,7 +25,6 @@ public class JwtTokenService(IOptions<AppOptions> options, TimeProvider clock)
     {
         var now = clock.GetUtcNow();
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.Value.JwtSecret));
-        // 不放 nbf：IdentityModel 的有效期驗證用真實時鐘，測試撥假時間時會被判「尚未生效」
         var token = new JwtSecurityToken(
             claims: [new Claim(JwtRegisteredClaimNames.Sub, userId.ToString())],
             expires: now.Add(Lifetime).UtcDateTime,

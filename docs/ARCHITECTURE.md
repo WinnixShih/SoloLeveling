@@ -189,7 +189,7 @@ flowchart LR
 ## 6. 驗證流程
 
 - **密碼**：`PasswordHasher` 使用 PBKDF2-SHA256、100,000 次、16 bytes salt、32 bytes hash，儲存格式 `pbkdf2-sha256$迭代次數$salt(Base64)$hash(Base64)`；驗證時讀字串內的迭代次數，日後調高不影響舊資料；比對用 `CryptographicOperations.FixedTimeEquals`。
-- **簽發**：`JwtTokenService.CreateToken` 以 `JwtSecret` 做 HS256，有效 7 天，只放 `sub`（使用者 ID），不放 `nbf`。註冊與登入都回 `{ token, user }`。
+- **簽發**：`JwtTokenService.CreateToken` 以 `JwtSecret` 做 HS256，有效 7 天，只放 `sub`（使用者 ID），有效期以注入的 `TimeProvider` 驗證（`Program.cs` 的 `LifetimeValidator`）。註冊與登入都回 `{ token, user }`。
 - **驗證**：`Program.cs` 以 `AddOptions<JwtBearerOptions>(…).Configure<IOptions<AppOptions>>` 從 `AppOptions.JwtSecret` 取驗證金鑰（與簽發端共用同一個 Options 與 `ValidateOnStart`，不直接讀 `Configuration`），設 `MapInboundClaims = false`（claim 名稱保留 `sub`）、不驗 issuer／audience、`ClockSkew` 1 分鐘。
 - **取使用者**：Controller 以 `[Authorize]` 保護，`CurrentUserExtensions.GetUserId()` 讀 `sub` 轉 Guid。
 - **401 格式**：`JwtBearerEvents.OnChallenge` 改寫回應為 `{ error: { code: "Unauthorized", message } }`；登入帳密錯誤是 `AccountService` 丟 `ApiErrorException.Unauthorized("InvalidCredentials", …)`。

@@ -122,7 +122,7 @@ curl -s -X PUT localhost:8080/api/v1/me/theme -H "Authorization: Bearer $TOKEN" 
 - **同一請求內的多筆 XpEvent** 時間相同，`Seq`（DB identity）只保證排序穩定，不保證與程式內建立順序一致。
 - **懲罰四捨五入**：`MidpointRounding.AwayFromZero`（實際上 `XpNeeded` 皆為 20 的倍數，乘 0.15 永遠是整數）。
 - **密碼**：PBKDF2-SHA256、100,000 次、16 bytes salt，格式自描述，可日後調高迭代次數。
-- **JWT 不放 `nbf`**：IdentityModel 的有效期驗證用真實時鐘，測試以假時鐘簽發時會被判尚未生效。
+- **JWT 有效期驗證用注入的 `TimeProvider`**：`Program.cs` 的 `LifetimeValidator` 取代 IdentityModel 預設的系統時鐘，測試以假時鐘簽發與撥時間才一致。
 - **XpEvent 沒有 `CreatedAt`**，`OccurredAt` 即建立時間。
 - **Email 重複**：以查詢先擋，極端併發下仍可能撞到唯一索引而回 500。
 - **升級寶箱以 PeakLevel 判定**：只對超過歷史最高等級的等級發 E 箱與晉階獎勵，撤銷降級後再升回來不重發；migration 把既有玩家的 PeakLevel 設為當時等級。

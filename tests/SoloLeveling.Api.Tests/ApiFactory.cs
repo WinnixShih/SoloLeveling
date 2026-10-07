@@ -23,6 +23,8 @@ public sealed class ApiFactory(string connectionString, string environment = "De
     /// <summary>抽卡亂數；預設永遠抽該等級的第一張卡，測試可改 <see cref="FixedRandom.Value"/>。</summary>
     public FixedRandom Rng { get; } = new();
 
+    private readonly Dictionary<HttpClient, (string Email, DateTimeOffset IssuedAt)> _sessions = [];
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(environment);
@@ -47,9 +49,10 @@ public sealed class ApiFactory(string connectionString, string environment = "De
     public async Task<HttpClient> RegisterAsync(string timeZoneId = "UTC", bool seedBasicQuests = true)
     {
         var client = CreateClient();
+        var email = $"{Guid.NewGuid():N}@test.local";
         var response = await client.PostAsJsonAsync("/api/v1/auth/register", new
         {
-            email = $"{Guid.NewGuid():N}@test.local",
+            email,
             password = "password123",
             displayName = "tester",
             timeZoneId,
@@ -57,6 +60,7 @@ public sealed class ApiFactory(string connectionString, string environment = "De
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", body.GetProperty("token").GetString());
+        _sessions[client] = (email, Clock.GetUtcNow());
         if (seedBasicQuests)
         {
             var seeded = await client.PostAsJsonAsync("/api/v1/goals", new { goals = Array.Empty<object>(), basicQuestIndexes = Enumerable.Range(0, 9).ToArray() });
@@ -64,5 +68,24 @@ public sealed class ApiFactory(string connectionString, string environment = "De
         }
 
         return client;
+    }
+
+    /// <summary>
+    /// 撥動假時鐘；權杖有效 7 天，撥超過 3 天後重新登入換發，讓長天數情境的 client 不會因權杖過期而 401。
+    /// </summary>
+    public async Task AdvanceAsync(HttpClient client, TimeSpan span)
+    {
+        Clock.Advance(span);
+        var session = _sessions[client];
+        if (Clock.GetUtcNow() - session.IssuedAt < TimeSpan.FromDays(3))
+        {
+            return;
+        }
+
+        var response = await CreateClient().PostAsJsonAsync("/api/v1/auth/login", new { email = session.Email, password = "password123" });
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", body.GetProperty("token").GetString());
+        _sessions[client] = (session.Email, Clock.GetUtcNow());
     }
 }

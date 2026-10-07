@@ -251,7 +251,7 @@ public sealed class RewardsFlowApiTests(PostgresFixture fixture) : IDisposable
     public async Task 開新週期_舊週期滿66天_發S箱並解鎖破繭()
     {
         var client = await _factory.RegisterAsync();
-        _factory.Clock.Advance(TimeSpan.FromDays(66));
+        await _factory.AdvanceAsync(client, TimeSpan.FromDays(66));
 
         var response = await client.PostAsync("/api/v1/program/restart", null);
 
@@ -266,7 +266,7 @@ public sealed class RewardsFlowApiTests(PostgresFixture fixture) : IDisposable
     public async Task 開新週期_舊週期未滿66天_不發S箱()
     {
         var client = await _factory.RegisterAsync();
-        _factory.Clock.Advance(TimeSpan.FromDays(65));
+        await _factory.AdvanceAsync(client, TimeSpan.FromDays(65));
 
         var body = await (await client.PostAsync("/api/v1/program/restart", null)).Content.ReadFromJsonAsync<JsonElement>();
 
@@ -284,7 +284,7 @@ public sealed class RewardsFlowApiTests(PostgresFixture fixture) : IDisposable
         for (var day = 1; day <= 29; day++)
         {
             AchievementKeys(await PutProgressAsync(client, screenId, 0)).Should().NotContain("screen-30");
-            _factory.Clock.Advance(TimeSpan.FromDays(1));
+            await _factory.AdvanceAsync(client, TimeSpan.FromDays(1));
         }
 
         AchievementKeys(await PutProgressAsync(client, screenId, 0)).Should().Contain("screen-30");

@@ -54,7 +54,7 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 ## 已知陷阱
 
 - **導覽集合加入的新實體會被當成 Modified。** 透過 `log.Progresses.Add(...)` 加入且主鍵已設值的實體，EF 會當成既有資料，`SaveChanges` 丟 `DbUpdateConcurrencyException`。要明確 `db.QuestProgresses.AddRange(...)`（見 `TodayService.SetProgressAsync`：先記下既有 Id，再把新增的標成 Added）。
-- **JWT 不放 `nbf`。** IdentityModel 驗有效期用真實時鐘，測試用 `FakeTimeProvider` 簽發會被判「尚未生效」（`JwtTokenService.CreateToken`）。
+- **JWT 有效期驗證用注入的 `TimeProvider`。** `Program.cs` 以 `LifetimeValidator` 取代 IdentityModel 預設的系統時鐘，否則測試用 `FakeTimeProvider` 簽發的權杖會隨真實時間過期而 401；不要拿掉。
 - **同一請求內多筆 XpEvent 的 `OccurredAt` 相同**，`Seq`（DB identity）只保證排序穩定，不保證等於程式內建立順序；測試不要驗同一時間點內的先後。
 - **Programs 有 partial unique index（每人只能一筆 `IsActive = true`）。** 換週期要先把舊的設 false 並 `SaveChangesAsync`，再新增新的（見 `ProgramService.RestartAsync`）。
 - **呼叫 `TodayContextLoader.LoadAsync` 前一定要先開交易。** 沒開的話 `SettlementService` 會自己開交易並 commit，Player 列鎖在載入今日、套規則之前就釋放，後續修改不再受鎖保護。

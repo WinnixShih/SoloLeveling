@@ -49,7 +49,7 @@ public sealed class ProgressionApiTests(PostgresFixture fixture) : IDisposable
         {
             (await QuestOfAsync(client, bedId)).GetProperty("name").GetString().Should().Be("00:55 前上床睡覺");
             await client.PutAsJsonAsync($"/api/v1/today/quests/{bedId}/progress", new { value = 1 });
-            _factory.Clock.Advance(TimeSpan.FromDays(1));
+            await _factory.AdvanceAsync(client, TimeSpan.FromDays(1));
         }
 
         // 第 4 天：第 2 階
@@ -58,9 +58,9 @@ public sealed class ProgressionApiTests(PostgresFixture fixture) : IDisposable
         day4.GetProperty("progression").GetProperty("stage").GetInt32().Should().Be(2);
 
         // 第 4、5 天沒勾，第 6 天勾 → 達標 4 天，仍第 2 階
-        _factory.Clock.Advance(TimeSpan.FromDays(2));
+        await _factory.AdvanceAsync(client, TimeSpan.FromDays(2));
         await client.PutAsJsonAsync($"/api/v1/today/quests/{bedId}/progress", new { value = 1 });
-        _factory.Clock.Advance(TimeSpan.FromDays(1));
+        await _factory.AdvanceAsync(client, TimeSpan.FromDays(1));
         var day7 = await QuestOfAsync(client, bedId);
         day7.GetProperty("progression").GetProperty("stage").GetInt32().Should().Be(2);
         day7.GetProperty("name").GetString().Should().Be("00:50 前上床睡覺");
@@ -69,7 +69,7 @@ public sealed class ProgressionApiTests(PostgresFixture fixture) : IDisposable
         for (var i = 0; i < 2; i++)
         {
             await client.PutAsJsonAsync($"/api/v1/today/quests/{bedId}/progress", new { value = 1 });
-            _factory.Clock.Advance(TimeSpan.FromDays(1));
+            await _factory.AdvanceAsync(client, TimeSpan.FromDays(1));
         }
 
         (await QuestOfAsync(client, bedId)).GetProperty("name").GetString().Should().Be("00:45 前上床睡覺");
@@ -109,7 +109,7 @@ public sealed class ProgressionApiTests(PostgresFixture fixture) : IDisposable
         for (var day = 0; day < 40; day++)
         {
             await client.PutAsJsonAsync($"/api/v1/today/quests/{bedId}/progress", new { value = 1 });
-            _factory.Clock.Advance(TimeSpan.FromDays(1));
+            await _factory.AdvanceAsync(client, TimeSpan.FromDays(1));
         }
 
         var quest = await QuestOfAsync(client, bedId);
