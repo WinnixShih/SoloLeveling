@@ -75,6 +75,25 @@ public class RewardApplier(AppDbContext db, RewardStatsLoader statsLoader, TimeP
     }
 
     /// <summary>
+    /// 讀取端點（GET /today、GET /me）用：本次結算沒有新結算任何一天且沒有待公告的保險卡事件時，玩家狀態沒有變動，
+    /// 略過統計查詢與獎勵判定，只回傳空獎勵；否則等同 <see cref="ApplyAsync"/>。
+    /// 待公告的保險卡事件代表排程已在請求之外結算過，那段期間可能累積了尚未發放的獎勵，所以仍走完整判定。
+    /// </summary>
+    /// <param name="context">今日內容。</param>
+    /// <param name="ct">取消權杖。</param>
+    /// <returns>本次獎勵，放進回應的 <c>rewards</c> 欄位。</returns>
+    public async Task<RewardsDto> ApplyOnReadAsync(TodayContext context, CancellationToken ct)
+    {
+        if (context.SettledDays > 0
+            || await db.RewardEvents.AnyAsync(e => e.UserId == context.User.Id && e.Kind == RewardEventKind.ShieldUsed && e.AnnouncedAt == null, ct))
+        {
+            return await ApplyAsync(context, 0, ct);
+        }
+
+        return new RewardsDto(0, [], [], [], 0, 0, [], context.Player.ShieldCount);
+    }
+
+    /// <summary>
     /// 把本次達成完成條件的目標寫入 <see cref="Goal.CompletedAt"/>；已完成的不再判定，所以 A 級寶箱只發一次。
     /// </summary>
     /// <param name="context">今日內容。</param>

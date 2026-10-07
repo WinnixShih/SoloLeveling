@@ -53,7 +53,7 @@ public abstract class GoalCategoryDefinition
     /// <exception cref="DomainValidationException">不是數字或超出範圍。</exception>
     protected static decimal ReadNumber(IReadOnlyDictionary<string, string> answers, GoalQuestion question)
     {
-        if (!decimal.TryParse(answers[question.Key], NumberStyles.Number, CultureInfo.InvariantCulture, out var value)
+        if (!decimal.TryParse(answers[question.Key], NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value)
             || value < question.Min || value > question.Max)
         {
             throw new DomainValidationException("InvalidAnswer", $"「{question.Label}」須為 {question.Min} 到 {question.Max} 的數字");

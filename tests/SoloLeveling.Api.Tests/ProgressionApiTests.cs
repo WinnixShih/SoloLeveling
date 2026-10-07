@@ -130,6 +130,11 @@ public sealed class ProgressionApiTests(PostgresFixture fixture) : IDisposable
         locked.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await locked.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetProperty("code").GetString().Should().Be("ProgressionQuestLocked");
 
+        var renamed = await client.PutAsJsonAsync($"/api/v1/quests/{readingId}", new { name = "改名", statType = "INT", difficulty = "Normal", questType = "Count", targetValue = (decimal?)null, step = 5, unit = "分鐘" });
+        renamed.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var restep = await client.PutAsJsonAsync($"/api/v1/quests/{readingId}", new { name = "閱讀", statType = "INT", difficulty = "Normal", questType = "Count", targetValue = (decimal?)null, step = 1, unit = "分鐘" });
+        restep.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
         var ok = await client.PutAsJsonAsync($"/api/v1/quests/{readingId}", new { name = "閱讀", statType = "INT", difficulty = "Hard", questType = "Count", targetValue = (decimal?)null, step = 5, unit = "分鐘" });
         ok.StatusCode.Should().Be(HttpStatusCode.OK);
         (await ok.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("difficulty").GetString().Should().Be("Hard");
@@ -145,5 +150,45 @@ public sealed class ProgressionApiTests(PostgresFixture fixture) : IDisposable
         var goals = await client.GetFromJsonAsync<JsonElement>("/api/v1/goals");
         var routine = goals.GetProperty("goals").EnumerateArray().Single(g => g.GetProperty("category").GetString() == "Routine");
         routine.GetProperty("quests").EnumerateArray().Single(q => q.GetProperty("id").GetGuid() == bedId).GetProperty("isArchived").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task PutQuest_漸進任務單位null與空字串視為相同_不誤判為改單位()
+    {
+        var (client, bedId, _) = await SetupAsync();
+        var quest = (await client.GetFromJsonAsync<JsonElement>("/api/v1/quests")).EnumerateArray().Single(q => q.GetProperty("id").GetGuid() == bedId);
+        quest.GetProperty("unit").ValueKind.Should().Be(JsonValueKind.Null);
+
+        var response = await client.PutAsJsonAsync($"/api/v1/quests/{bedId}", new
+        {
+            name = "{target} 前上床睡覺",
+            statType = "VIT",
+            difficulty = "Hard",
+            questType = quest.GetProperty("questType").GetString(),
+            targetValue = quest.GetProperty("targetValue").ValueKind == JsonValueKind.Null ? (decimal?)null : quest.GetProperty("targetValue").GetDecimal(),
+            step = quest.GetProperty("step").ValueKind == JsonValueKind.Null ? (decimal?)null : quest.GetProperty("step").GetDecimal(),
+            unit = "  ",
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task GetGoals_單獨封存的漸進任務_仍顯示依達標天數算出的階段()
+    {
+        var (client, bedId, _) = await SetupAsync();
+        for (var day = 0; day < 3; day++)
+        {
+            await client.PutAsJsonAsync($"/api/v1/today/quests/{bedId}/progress", new { value = 1 });
+            _factory.Clock.Advance(TimeSpan.FromDays(1));
+        }
+
+        (await client.DeleteAsync($"/api/v1/quests/{bedId}")).EnsureSuccessStatusCode();
+
+        var goals = await client.GetFromJsonAsync<JsonElement>("/api/v1/goals");
+        var routine = goals.GetProperty("goals").EnumerateArray().Single(g => g.GetProperty("category").GetString() == "Routine");
+        var archived = routine.GetProperty("quests").EnumerateArray().Single(q => q.GetProperty("id").GetGuid() == bedId);
+        archived.GetProperty("isArchived").GetBoolean().Should().BeTrue();
+        archived.GetProperty("stage").GetInt32().Should().Be(2);
     }
 }

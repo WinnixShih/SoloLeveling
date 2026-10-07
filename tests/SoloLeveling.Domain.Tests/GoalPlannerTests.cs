@@ -170,6 +170,25 @@ public class GoalPlannerTests
         act.Should().Throw<DomainValidationException>().Which.Code.Should().Be("MissingAnswer");
     }
 
+    [Theory]
+    [InlineData("1,0")]
+    [InlineData("1 000")]
+    [InlineData("+")]
+    public void Plan_數值含千分位或非法符號_丟InvalidAnswer(string value)
+    {
+        var answers = new Dictionary<string, string> { ["currentMinutes"] = "10", ["targetMinutes"] = value, ["lengthDays"] = "30" };
+        var act = () => GoalPlanner.Plan(GoalCategory.Reading, answers);
+        act.Should().Throw<DomainValidationException>().Which.Code.Should().Be("InvalidAnswer");
+    }
+
+    [Fact]
+    public void Plan_帶類別沒有的回答鍵_丟UnknownAnswer()
+    {
+        var answers = new Dictionary<string, string> { ["currentMinutes"] = "10", ["targetMinutes"] = "30", ["lengthDays"] = "30", ["bogus"] = "1" };
+        var act = () => GoalPlanner.Plan(GoalCategory.Reading, answers);
+        act.Should().Throw<DomainValidationException>().Which.Code.Should().Be("UnknownAnswer");
+    }
+
     [Fact]
     public void Plan_數值超出問題範圍_丟例外()
     {

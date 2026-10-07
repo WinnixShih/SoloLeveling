@@ -97,7 +97,7 @@ flowchart LR
 | `Services/TodayService.cs` | 今日查詢、進度寫入、反思筆記；`Build` 組 `TodayResponse`（漸進任務加 `progression` 物件） |
 | `Services/HistoryService.cs` | 每日紀錄（區間 ≤ 100 天）與 EXP 流水（limit 夾在 1–200） |
 | `Services/ProgramService.cs` | 開新 66 天週期 |
-| `Services/RewardApplier.cs` | `ApplyAsync(context, completedPrograms, ct)`：在第一次 SaveChanges 之後判定目標完成、查統計、`Rewards.Evaluate`、寫寶箱／成就／CoinEvent、回報保險卡事件，回傳 `RewardsDto` |
+| `Services/RewardApplier.cs` | `ApplyAsync(context, completedPrograms, ct)`：在第一次 SaveChanges 之後判定目標完成、查統計、`Rewards.Evaluate`、寫寶箱／成就／CoinEvent、回報保險卡事件，回傳 `RewardsDto`；`ApplyOnReadAsync(context, ct)` 供 `GET /today`、`GET /me`，無新結算且無待公告保險卡事件時略過判定回空獎勵 |
 | `Services/RewardStatsLoader.cs` | 成就統計的批次查詢（最多 7 次，不隨任務數增加） |
 | `Services/RewardService.cs` | 獎勵總覽、開箱、圖鑑、商店 |
 | `Services/SettlementScheduler.cs` | `BackgroundService`，啟動時跑一次、之後每小時 `RunOnceAsync` |

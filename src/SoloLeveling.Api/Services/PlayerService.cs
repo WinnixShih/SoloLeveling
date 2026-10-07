@@ -27,7 +27,7 @@ public class PlayerService(AppDbContext db, TodayContextLoader loader, RewardApp
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var context = await loader.LoadAsync(userId, ct);
-        return await SaveAndBuildAsync(context, tx, ct);
+        return await SaveAndBuildAsync(context, tx, ct, isRead: true);
     }
 
     /// <summary>
@@ -158,11 +158,14 @@ public class PlayerService(AppDbContext db, TodayContextLoader loader, RewardApp
     /// <param name="context">今日內容（已套用本次修改）。</param>
     /// <param name="tx">呼叫端開的交易。</param>
     /// <param name="ct">取消權杖。</param>
+    /// <param name="isRead">true 表示純讀取（GET /me），無新結算時略過獎勵判定。</param>
     /// <returns>總覽（含本次獎勵）。</returns>
-    private async Task<MeResponse> SaveAndBuildAsync(TodayContext context, IDbContextTransaction tx, CancellationToken ct)
+    private async Task<MeResponse> SaveAndBuildAsync(TodayContext context, IDbContextTransaction tx, CancellationToken ct, bool isRead = false)
     {
         await db.SaveChangesAsync(ct);
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
+        var rewards = isRead
+            ? await rewardApplier.ApplyOnReadAsync(context, ct)
+            : await rewardApplier.ApplyAsync(context, 0, ct);
         var program = await db.Programs.AsNoTracking().SingleAsync(p => p.UserId == context.User.Id && p.IsActive, ct);
         await tx.CommitAsync(ct);
         return new MeResponse(

@@ -228,7 +228,7 @@ Name,StatType,Difficulty,QuestType,TargetValue,Step,Unit
 
 **主題**：`Player.ThemeKey`（`azure`／`violet`／`jade`，預設 `azure`），已購買記在 `OwnedThemes`。
 
-**判定時機**：所有會改玩家狀態的端點（以及 `GET /today`、`GET /me`，因為結算可能已消耗保險卡或補上成就條件）在第一次 `SaveChanges` 之後呼叫一次 `RewardApplier`（內部執行 `Rewards.Evaluate`），結果寫入 DB 並放進回應的 `rewards` 欄位；排程結算不發寶箱，等下一次請求補判定。`GET /rewards` 只結算、不套用獎勵（套用會吃掉待公告的保險卡事件）；`GET /cards`、`GET /goals`、`GET /history` 不套用獎勵。
+**判定時機**：所有會改玩家狀態的端點在第一次 `SaveChanges` 之後呼叫一次 `RewardApplier`（內部執行 `Rewards.Evaluate`），結果寫入 DB 並放進回應的 `rewards` 欄位；`GET /today`、`GET /me` 只在本次請求新結算了至少一天、或有待公告的保險卡事件時才判定，否則回空的 `rewards`。排程結算不發寶箱，等下一次判定的請求補發。`GET /rewards` 只結算、不套用獎勵（套用會吃掉待公告的保險卡事件）；`GET /cards`、`GET /goals`、`GET /history` 不套用獎勵。
 
 **前端**：導覽第三格「檔案（HUNTER）」呈現狀態面板與稱號組合、金幣與保險卡、待開寶箱、成就、圖鑑與釘選卡；商店視窗有保險卡與 E 級寶箱兩項，主題在設定頁購買與切換。系統訊息依 `rewards` 依序顯示：升級 → 晉階 → 寶箱 → 成就 → 保險卡生效。
 

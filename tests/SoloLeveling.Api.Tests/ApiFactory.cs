@@ -3,10 +3,12 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
 using SoloLeveling.Api.Services;
+using SoloLeveling.Infrastructure;
 
 namespace SoloLeveling.Api.Tests;
 
@@ -23,6 +25,9 @@ public sealed class ApiFactory(string connectionString, string environment = "De
     /// <summary>抽卡亂數；預設永遠抽該等級的第一張卡，測試可改 <see cref="FixedRandom.Value"/>。</summary>
     public FixedRandom Rng { get; } = new();
 
+    /// <summary>記錄經 EF 送出的 SQL，供測試判斷某段查詢是否執行過。</summary>
+    public SqlRecorder Sql { get; } = new();
+
     private readonly Dictionary<HttpClient, (string Email, DateTimeOffset IssuedAt)> _sessions = [];
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -34,6 +39,7 @@ public sealed class ApiFactory(string connectionString, string environment = "De
         {
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
+            services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(Sql));
             services.RemoveAll<Random>();
             services.AddSingleton<Random>(Rng);
             // 排程結算不在測試 host 內背景執行，避免跟測試本身的結算互相干擾；排程邏輯另有專屬測試

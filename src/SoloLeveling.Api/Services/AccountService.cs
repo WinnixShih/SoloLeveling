@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using SoloLeveling.Api.Auth;
 using SoloLeveling.Api.Contracts;
 using SoloLeveling.Api.Errors;
@@ -68,7 +69,15 @@ public class AccountService(AppDbContext db, TimeProvider clock, JwtTokenService
         db.Users.Add(user);
         db.Players.Add(new Player { UserId = user.Id, CreatedAt = now });
         db.Programs.Add(new ProgramEntity { Id = Guid.NewGuid(), UserId = user.Id, StartDate = today, Cycle = 1, IsActive = true, CreatedAt = now });
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // 預查與寫入之間被同 Email 的併發註冊搶先，唯一索引擋下
+            throw ApiErrorException.Conflict("EmailTaken", "此 Email 已被註冊");
+        }
 
         return new AuthResponse(tokens.CreateToken(user.Id), user.ToDto());
     }

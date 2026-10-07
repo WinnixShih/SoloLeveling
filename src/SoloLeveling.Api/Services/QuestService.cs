@@ -86,7 +86,8 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, RewardAppl
                 && request.QuestType == quest.QuestType
                 && request.TargetValue == quest.TargetValue
                 && request.Step == quest.Step
-                && request.Unit?.Trim() == quest.Unit;
+                && string.IsNullOrWhiteSpace(request.Unit) == string.IsNullOrWhiteSpace(quest.Unit)
+                && (string.IsNullOrWhiteSpace(request.Unit) || request.Unit.Trim() == quest.Unit);
             if (!unchanged)
             {
                 throw ApiErrorException.BadRequest("ProgressionQuestLocked", "漸進任務只能修改屬性與難度；要改目標請封存目標後重新建立");

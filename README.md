@@ -124,7 +124,7 @@ curl -s -X PUT localhost:8080/api/v1/me/theme -H "Authorization: Bearer $TOKEN" 
 - **密碼**：PBKDF2-SHA256、100,000 次、16 bytes salt，格式自描述，可日後調高迭代次數。
 - **JWT 有效期驗證用注入的 `TimeProvider`**：`Program.cs` 的 `LifetimeValidator` 取代 IdentityModel 預設的系統時鐘，測試以假時鐘簽發與撥時間才一致。
 - **XpEvent 沒有 `CreatedAt`**，`OccurredAt` 即建立時間。
-- **Email 重複**：以查詢先擋，極端併發下仍可能撞到唯一索引而回 500。
+- **Email 重複**：先查詢擋下；併發撞到唯一索引時捕捉 PostgreSQL 23505 一樣回 409 `EmailTaken`。
 - **升級寶箱以 PeakLevel 判定**：只對超過歷史最高等級的等級發 E 箱與晉階獎勵，撤銷降級後再升回來不重發；migration 把既有玩家的 PeakLevel 設為當時等級。
 - **成就以狀態判定**：條件成立且未解鎖就解鎖，因此上線前已達成的條件會在下一次請求補解鎖一次（含連續 7／30 天的寶箱）。
 - **達標金幣收回最多扣到 0**：金幣可能已花掉，收回時不讓餘額變負，事件金額等於實際扣除量。
@@ -136,7 +136,5 @@ curl -s -X PUT localhost:8080/api/v1/me/theme -H "Authorization: Bearer $TOKEN" 
 
 - 推播、好友、排名、專注計時器、AI 功能、原生 App、付費（規格明列第一階段不做）。
 - Refresh token／登出即失效。
-- 註冊的 Email 唯一索引衝突改回 409。
 - 前端加離線暫存與 PWA。
-- GET /today、GET /me 每次讀取都套用獎勵判定（約 9 次查詢），之後可在無狀態變更時略過統計查詢。
 - 獎勵系統之後可能加：地下城、66 天 Boss、更多主題、稱號特效、以金幣兌換指定卡片。

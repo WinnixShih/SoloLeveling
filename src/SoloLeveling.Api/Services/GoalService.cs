@@ -231,6 +231,7 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, RewardAppli
             Name = b.Name,
             QuestType = b.QuestType,
             Unit = b.Unit,
+            // 預覽用的暫時 Quest，不會寫入 DB；GoalId 只是讓 Progression 判成漸進任務
             GoalId = Guid.Empty,
             ValueKind = b.ValueKind,
             StartValue = b.StartValue,
@@ -270,6 +271,8 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, RewardAppli
         var goalIds = goals.Select(g => g.Id).ToHashSet();
         var quests = await db.Quests.Where(q => q.GoalId != null && goalIds.Contains(q.GoalId.Value)).OrderBy(q => q.SortOrder).ToListAsync(ct);
         var byGoal = quests.ToLookup(q => q.GoalId!.Value);
+        // context 只含未封存任務的達標天數；單獨封存的任務另外批次補查，階段才不會被當成第 1 階
+        var archivedDays = await loader.LoadDoneDaysAsync(quests.Where(q => q.IsArchived).Select(q => q.Id).ToList(), context.Today, ct);
         var orderedGoals = goals
             .OrderBy(g => g.CreatedAt)
             .ThenBy(g => byGoal[g.Id].Any() ? byGoal[g.Id].Min(q => q.SortOrder) : int.MaxValue)
@@ -283,7 +286,7 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, RewardAppli
             g.StartDate,
             byGoal[g.Id].Select(q =>
             {
-                var days = context.DoneDaysOf(q.Id);
+                var days = q.IsArchived ? archivedDays.GetValueOrDefault(q.Id) : context.DoneDaysOf(q.Id);
                 var target = Progression.EffectiveTarget(q, days) ?? 0;
                 return new GoalQuestDto(q.Id, Progression.RenderName(q, days), Progression.StageOf(q, days), q.StageCount ?? 1, Progression.TargetLabel(q, target), q.IsArchived);
             }).ToList())).ToList());

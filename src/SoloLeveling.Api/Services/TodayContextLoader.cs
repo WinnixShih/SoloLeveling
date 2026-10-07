@@ -14,6 +14,7 @@ namespace SoloLeveling.Api.Services;
 /// <param name="ActiveQuests">未封存任務，依 SortOrder 排序。</param>
 /// <param name="Today">使用者時區的今日。</param>
 /// <param name="DoneDaysBeforeToday">每個漸進任務在今天之前的達標天數；一般任務不在字典內。</param>
+/// <param name="SettledDays">本次請求的結算新結算了幾天；0 代表玩家狀態沒有因結算而改變。</param>
 /// <param name="Before">結算後、任何修改前的玩家快照（在列鎖內拍；結算不改等級，等同請求前的值），供獎勵回應的 levelsGained 使用。</param>
 public sealed record TodayContext(
     User User,
@@ -22,6 +23,7 @@ public sealed record TodayContext(
     List<Quest> ActiveQuests,
     DateOnly Today,
     IReadOnlyDictionary<Guid, int> DoneDaysBeforeToday,
+    int SettledDays,
     PlayerSnapshot Before)
 {
     /// <summary>
@@ -61,15 +63,30 @@ public class TodayContextLoader(AppDbContext db, SettlementService settlement)
             .ToListAsync(ct);
 
         var progressionIds = activeQuests.Where(q => q.GoalId != null).Select(q => q.Id).ToList();
-        var doneDays = progressionIds.Count == 0
-            ? new Dictionary<Guid, int>()
-            : await db.QuestProgresses
-                .Join(db.DailyLogs, p => p.DailyLogId, l => l.Id, (p, l) => new { p.QuestId, p.IsDone, l.Date })
-                .Where(x => x.IsDone && x.Date < settled.Today && progressionIds.Contains(x.QuestId))
-                .GroupBy(x => x.QuestId)
-                .Select(g => new { QuestId = g.Key, Days = g.Count() })
-                .ToDictionaryAsync(x => x.QuestId, x => x.Days, ct);
+        var doneDays = await LoadDoneDaysAsync(progressionIds, settled.Today, ct);
 
-        return new TodayContext(user, player, settled.TodayLog, activeQuests, settled.Today, doneDays, new PlayerSnapshot(player.Level));
+        return new TodayContext(user, player, settled.TodayLog, activeQuests, settled.Today, doneDays, settled.SettledDays, new PlayerSnapshot(player.Level));
+    }
+
+    /// <summary>
+    /// 批次查出指定任務在今天之前的達標天數（一次查詢）；沒有達標紀錄的任務不在回傳字典內。
+    /// </summary>
+    /// <param name="questIds">任務 ID；可含已封存的任務。</param>
+    /// <param name="today">使用者時區的今日。</param>
+    /// <param name="ct">取消權杖。</param>
+    /// <returns>任務 ID 對達標天數的字典。</returns>
+    public async Task<Dictionary<Guid, int>> LoadDoneDaysAsync(IReadOnlyCollection<Guid> questIds, DateOnly today, CancellationToken ct)
+    {
+        if (questIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await db.QuestProgresses
+            .Join(db.DailyLogs, p => p.DailyLogId, l => l.Id, (p, l) => new { p.QuestId, p.IsDone, l.Date })
+            .Where(x => x.IsDone && x.Date < today && questIds.Contains(x.QuestId))
+            .GroupBy(x => x.QuestId)
+            .Select(g => new { QuestId = g.Key, Days = g.Count() })
+            .ToDictionaryAsync(x => x.QuestId, x => x.Days, ct);
     }
 }

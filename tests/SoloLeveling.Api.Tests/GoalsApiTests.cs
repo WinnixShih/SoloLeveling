@@ -180,6 +180,22 @@ public sealed class GoalsApiTests(PostgresFixture fixture) : IDisposable
     }
 
     [Fact]
+    public async Task PostGoals_帶未知的回答鍵_回400且不建立目標()
+    {
+        var client = await _factory.RegisterAsync(seedBasicQuests: false);
+
+        var response = await client.PostAsJsonAsync("/api/v1/goals", new
+        {
+            goals = new[] { new { category = "Reading", answers = new { currentMinutes = 10, targetMinutes = 30, lengthDays = 30, bogus = "x" } } },
+            basicQuestIndexes = Array.Empty<int>(),
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetProperty("code").GetString().Should().Be("UnknownAnswer");
+        (await client.GetFromJsonAsync<JsonElement>("/api/v1/goals")).GetProperty("goals").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
     public async Task PostGoals_未知類別_回400()
     {
         var client = await _factory.RegisterAsync(seedBasicQuests: false);
@@ -195,12 +211,18 @@ public sealed class GoalsApiTests(PostgresFixture fixture) : IDisposable
         var client = await _factory.RegisterAsync(seedBasicQuests: false);
         var created = await (await client.PostAsJsonAsync("/api/v1/goals", new { goals = new[] { ReadingGoal() }, basicQuestIndexes = new[] { 2 } })).Content.ReadFromJsonAsync<JsonElement>();
         var goalId = created.GetProperty("goals")[0].GetProperty("id").GetGuid();
+        var waterId = (await client.GetFromJsonAsync<JsonElement>("/api/v1/today")).GetProperty("quests").EnumerateArray()
+            .Single(q => q.GetProperty("name").GetString() == "喝水").GetProperty("id").GetGuid();
+        var done = await client.PutAsJsonAsync($"/api/v1/today/quests/{waterId}/progress", new { value = 8 });
+        (await done.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("completionRatio").GetDecimal().Should().BeLessThan(1m);
 
         var del = await client.DeleteAsync($"/api/v1/goals/{goalId}");
 
         del.StatusCode.Should().Be(HttpStatusCode.OK);
         var today = await client.GetFromJsonAsync<JsonElement>("/api/v1/today");
         today.GetProperty("quests").EnumerateArray().Select(q => q.GetProperty("name").GetString()).Should().Equal("喝水");
+        // 分母只剩已完成的喝水
+        today.GetProperty("completionRatio").GetDecimal().Should().Be(1m);
         var goals = await client.GetFromJsonAsync<JsonElement>("/api/v1/goals");
         goals.GetProperty("goals").GetArrayLength().Should().Be(0);
 

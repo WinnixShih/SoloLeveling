@@ -19,10 +19,17 @@ public static class GoalPlanner
     /// <param name="category">類別。</param>
     /// <param name="answers">回答（鍵為問題 key，值為字串）。</param>
     /// <returns>任務藍圖。</returns>
-    /// <exception cref="DomainValidationException">類別未知、缺回答、天數不合法、回答格式或範圍不合法、目標不比現況好。</exception>
+    /// <exception cref="DomainValidationException">類別未知、缺回答、多出類別沒有的回答鍵、天數不合法、回答格式或範圍不合法、目標不比現況好。</exception>
     public static IReadOnlyList<GoalQuestBlueprint> Plan(GoalCategory category, IReadOnlyDictionary<string, string> answers)
     {
         var definition = GoalCategories.Get(category);
+        var knownKeys = definition.Questions.Select(q => q.Key).ToHashSet();
+        var unknown = answers.Keys.FirstOrDefault(k => !knownKeys.Contains(k));
+        if (unknown is not null)
+        {
+            throw new DomainValidationException("UnknownAnswer", $"此類別沒有「{unknown}」這個回答");
+        }
+
         foreach (var question in definition.Questions)
         {
             if (!answers.ContainsKey(question.Key))
