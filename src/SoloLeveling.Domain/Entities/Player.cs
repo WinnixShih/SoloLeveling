@@ -65,6 +65,9 @@ public class Player
     /// <summary>最後一個已結算的日期（使用者時區）；null 表示尚未結算過。</summary>
     public DateOnly? LastSettledDate { get; set; }
 
+    /// <summary>最後一次完整跑獎勵判定的日期（使用者時區）；讀取端點每天至少完整判定一次，null 表示從未判定過。</summary>
+    public DateOnly? RewardsEvaluatedDate { get; set; }
+
     /// <summary>建立時間（UTC）；首次結算的起算日由此換算。</summary>
     public DateTimeOffset CreatedAt { get; set; }
 

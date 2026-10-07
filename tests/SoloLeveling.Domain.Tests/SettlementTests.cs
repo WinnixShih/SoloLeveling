@@ -286,4 +286,34 @@ public class SettlementTests
         result.Events.Should().ContainSingle(e => e.Source == XpSource.Penalty && e.Amount == -15);
         result.ShieldsUsed.Should().Equal(Yesterday);
     }
+
+    [Fact]
+    public void Settle_已全部結算過_SettledDays為0()
+    {
+        var player = NewPlayer(lastSettled: Yesterday);
+
+        var result = Settlement.Settle(player, Tz, [], Now);
+
+        result.SettledDays.Should().Be(0);
+    }
+
+    [Fact]
+    public void Settle_缺席多日補結算_SettledDays等於補結算的日數()
+    {
+        var player = NewPlayer(lastSettled: Today.AddDays(-4));
+
+        var result = Settlement.Settle(player, Tz, [], Now);
+
+        result.SettledDays.Should().Be(3);
+    }
+
+    [Fact]
+    public void Settle_缺席超過補結算上限_SettledDays為上限天數()
+    {
+        var player = NewPlayer(lastSettled: Today.AddDays(-(Settlement.MaxCatchUpDays + 50)));
+
+        var result = Settlement.Settle(player, Tz, [], Now);
+
+        result.SettledDays.Should().Be(Settlement.MaxCatchUpDays);
+    }
 }

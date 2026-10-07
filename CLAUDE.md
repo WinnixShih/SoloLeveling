@@ -38,7 +38,7 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 
 - **Player.Xp 的任何變動都必須對應一筆 XpEvent。** Domain 規則方法（`ProgressUpdater`、`Settlement`、`Leveling`）只改記憶體中的實體並回傳事件，由 Api 服務層 `db.XpEvents.AddRange(...)` 持久化。直接呼叫 `Leveling.GainXp／LoseXp／ApplyPenalty` 時要自己補事件。
 - **Player.Coins 的任何變動都必須對應一筆 CoinEvent，一律經 `Wallet.Change`／`Wallet.Spend`。** 不要直接改 `Player.Coins`（測試種資料除外）。
-- **會改玩家狀態的端點在第一次 `SaveChangesAsync` 之後呼叫一次 `RewardApplier.ApplyAsync`，再 commit。** 它會查統計（要看得到本次修改）、寫寶箱／成就／金幣事件、回報保險卡事件並再存一次；回傳的 `RewardsDto` 放進回應的 `Rewards`。`GET /today`、`GET /me` 改呼叫 `ApplyOnReadAsync`（結算可能消耗保險卡）：本次結算沒新結算任何一天且沒有待公告保險卡事件時略過統計與判定、回空獎勵，否則等同 `ApplyAsync`；只讀的 `GET /rewards`（只結算）、`/cards`、`/goals`、`/history` 不呼叫，否則會吃掉待公告的保險卡事件。
+- **會改玩家狀態的端點在第一次 `SaveChangesAsync` 之後呼叫一次 `RewardApplier.ApplyAsync`，再 commit。** 它會查統計（要看得到本次修改）、寫寶箱／成就／金幣事件、回報保險卡事件並再存一次；回傳的 `RewardsDto` 放進回應的 `Rewards`。`GET /today`、`GET /me` 改呼叫 `ApplyOnReadAsync`（結算可能消耗保險卡）：本次結算新結算了日子、有待公告保險卡事件、或 `Player.RewardsEvaluatedDate` 不是今天時等同 `ApplyAsync`（因此每天至少完整判定一次），其餘略過統計與判定、回空獎勵；要封存目標／任務的端點須在封存前呼叫 `CompleteFinishedGoalsAsync` 並把結果傳給 `ApplyAsync` 的 `alreadyCompletedGoals`，否則走完期間當天封存會丟掉 A 箱；只讀的 `GET /rewards`（只結算）、`/cards`、`/goals`、`/history` 不呼叫，否則會吃掉待公告的保險卡事件。
 - **升級寶箱與晉階獎勵以 `Player.PeakLevel` 判定**，成就以「條件成立且未解鎖」判定；不要改成請求前後差，否則撤銷再完成可以刷寶箱。
 - **所有需要「今日」的端點都要先結算。** 服務層先 `db.Database.BeginTransactionAsync` → `TodayContextLoader.LoadAsync`（內部呼叫 `SettlementService.SettleAsync`，沿用呼叫端交易，以 `SELECT … FOR UPDATE` 鎖 Player 列）→ 修改 → `SaveChangesAsync` → `CommitAsync`。不需要今日的查詢（`QuestService.ListAsync`、`ReorderAsync`、`HistoryService.GetXpEventsAsync`）不結算。
 - **「今日」只能用 `UserClock.DateOf(now, user.TimeZoneId)` 決定。** 時間來源一律注入 `TimeProvider`（`clock.GetUtcNow()`），禁止直接用 `DateTime.Now`／`DateTime.UtcNow`。
@@ -85,6 +85,6 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 
 ## 目前狀態
 
-- MVP、引導式目標、系統介面改版、獎勵系統完成，測試全綠（334 個：Domain 241 + Api 93）。
+- MVP、引導式目標、系統介面改版、獎勵系統完成，測試全綠（340 個：Domain 244 + Api 96）。
 - GitHub 遠端 `origin` 是 `git@github.com:WinnixShih/SoloLeveling.git`，`main` 已 push 並追蹤 `origin/main`。
 - 待辦見 README「後續」：refresh token／登出即失效、前端離線暫存與 PWA 等。

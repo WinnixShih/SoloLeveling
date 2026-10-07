@@ -14,7 +14,7 @@ namespace SoloLeveling.Api.Services;
 /// <param name="ActiveQuests">未封存任務，依 SortOrder 排序。</param>
 /// <param name="Today">使用者時區的今日。</param>
 /// <param name="DoneDaysBeforeToday">每個漸進任務在今天之前的達標天數；一般任務不在字典內。</param>
-/// <param name="SettledDays">本次請求的結算新結算了幾天；0 代表玩家狀態沒有因結算而改變。</param>
+/// <param name="SettledDays">本次請求的結算新結算的日數；0 代表這次請求沒有結算任何一天（已結算過的日子不重複計）。</param>
 /// <param name="Before">結算後、任何修改前的玩家快照（在列鎖內拍；結算不改等級，等同請求前的值），供獎勵回應的 levelsGained 使用。</param>
 public sealed record TodayContext(
     User User,

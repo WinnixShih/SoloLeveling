@@ -64,7 +64,7 @@ public sealed record RewardOutcome(
 
 /// <summary>
 /// 獎勵判定（純函式，不修改傳入的實體）。升級與晉階以 <see cref="Player.PeakLevel"/> 判定，撤銷降級後再升回來不重發；
-/// 成就以「條件成立且未解鎖」判定，因此排程結算造成的狀態變化也會在下一次請求補上。
+/// 成就以「條件成立且未解鎖」判定，因此排程結算造成的狀態變化會在下一次判定時補上（讀取端點每天至少完整判定一次）。
 /// </summary>
 public static class Rewards
 {

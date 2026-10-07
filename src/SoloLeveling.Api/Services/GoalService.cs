@@ -171,6 +171,7 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, RewardAppli
         var goal = await db.Goals.SingleOrDefaultAsync(g => g.Id == goalId && g.UserId == userId && !g.IsArchived, ct)
             ?? throw ApiErrorException.NotFound("GoalNotFound", "目標不存在");
         var now = clock.GetUtcNow();
+        var completedGoals = await rewardApplier.CompleteFinishedGoalsAsync(context, ct);
 
         goal.IsArchived = true;
         goal.ArchivedAt = now;
@@ -183,7 +184,7 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, RewardAppli
 
         db.XpEvents.AddRange(ProgressUpdater.Recalculate(context.Player, context.TodayLog, context.ActiveQuests, now));
         await db.SaveChangesAsync(ct);
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
+        var rewards = await rewardApplier.ApplyAsync(context, 0, ct, completedGoals);
         await tx.CommitAsync(ct);
         return rewards;
     }

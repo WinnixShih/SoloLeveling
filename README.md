@@ -126,7 +126,7 @@ curl -s -X PUT localhost:8080/api/v1/me/theme -H "Authorization: Bearer $TOKEN" 
 - **XpEvent 沒有 `CreatedAt`**，`OccurredAt` 即建立時間。
 - **Email 重複**：先查詢擋下；併發撞到唯一索引時捕捉 PostgreSQL 23505 一樣回 409 `EmailTaken`。
 - **升級寶箱以 PeakLevel 判定**：只對超過歷史最高等級的等級發 E 箱與晉階獎勵，撤銷降級後再升回來不重發；migration 把既有玩家的 PeakLevel 設為當時等級。
-- **成就以狀態判定**：條件成立且未解鎖就解鎖，因此上線前已達成的條件會在下一次請求補解鎖一次（含連續 7／30 天的寶箱）。
+- **成就以狀態判定**：條件成立且未解鎖就解鎖，因此上線前已達成的條件會在下一次判定時補解鎖一次（含連續 7／30 天的寶箱）；`GET /today`、`GET /me` 每位使用者每天至少完整判定一次（`Player.RewardsEvaluatedDate`），之後同日且無新結算時略過。
 - **達標金幣收回最多扣到 0**：金幣可能已花掉，收回時不讓餘額變負，事件金額等於實際扣除量。
 - **保險卡只在連勝進行中消耗**：Streak 為 0 時沒有東西可保護，不消耗；晉階送的保險卡受上限 3 截斷。
 - **封存回 200**：`DELETE /quests/{id}`、`DELETE /goals/{id}` 回 `{ rewards }`，封存造成的達標金幣與升級訊息才不會遺失。

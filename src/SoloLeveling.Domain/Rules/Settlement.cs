@@ -10,7 +10,7 @@ namespace SoloLeveling.Domain.Rules;
 /// <param name="NewLogs">這次新建的 <see cref="DailyLog"/>（含補建的缺席日與今日）。</param>
 /// <param name="Events">這次產生的 EXP 事件（只會有 Penalty）。</param>
 /// <param name="ShieldsUsed">這次消耗保險卡保護的日期，由舊到新；呼叫端據此寫 <c>RewardEvent</c>。</param>
-/// <param name="SettledDays">這次新結算的天數；0 代表玩家狀態沒有因結算而改變。</param>
+/// <param name="SettledDays">本次新結算的日數；0 代表這次沒有結算任何一天（已結算過的日子不重複計）。</param>
 public record SettlementResult(DateOnly Today, DailyLog TodayLog, IReadOnlyList<DailyLog> NewLogs, IReadOnlyList<XpEvent> Events, IReadOnlyList<DateOnly> ShieldsUsed, int SettledDays);
 
 /// <summary>

@@ -472,7 +472,7 @@ input.limit-input { width: 76px; text-align: right; }
 
 /* ---- 進度 ---- */
 /* 固定一列 7 天；格寬隨螢幕縮放，格高以 min-height 保住 --tap 觸控面積 */
-.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 8px; max-width: 360px; margin-inline: auto; }
 .day {
   display: grid;
   place-items: center;

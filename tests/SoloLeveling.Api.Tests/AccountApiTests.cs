@@ -1,7 +1,12 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using FluentAssertions;
+using Microsoft.IdentityModel.Tokens;
 
 namespace SoloLeveling.Api.Tests;
 
@@ -103,6 +108,21 @@ public sealed class AccountApiTests(PostgresFixture fixture) : IDisposable
 
         beforeExpiry.StatusCode.Should().Be(HttpStatusCode.OK);
         afterExpiry.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Token沒有exp_回401()
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(ApiFactory.JwtSecret));
+        var token = new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
+            claims: [new Claim(JwtRegisteredClaimNames.Sub, Guid.NewGuid().ToString())],
+            signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256)));
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync("/api/v1/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]

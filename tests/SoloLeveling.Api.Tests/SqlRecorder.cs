@@ -25,7 +25,14 @@ public sealed class SqlRecorder : DbCommandInterceptor
         return _commands.Count(c => c.Contains(fragment, StringComparison.Ordinal));
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 在查詢送出前記下 SQL 文字，不改變執行結果。
+    /// </summary>
+    /// <param name="command">即將執行的命令。</param>
+    /// <param name="eventData">事件資料。</param>
+    /// <param name="result">攔截結果，原樣回傳。</param>
+    /// <param name="cancellationToken">取消權杖。</param>
+    /// <returns>原攔截結果。</returns>
     public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
         DbCommand command,
         CommandEventData eventData,

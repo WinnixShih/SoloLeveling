@@ -73,7 +73,7 @@ public class AccountService(AppDbContext db, TimeProvider clock, JwtTokenService
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_Users_Email" })
         {
             // 預查與寫入之間被同 Email 的併發註冊搶先，唯一索引擋下
             throw ApiErrorException.Conflict("EmailTaken", "此 Email 已被註冊");

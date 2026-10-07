@@ -130,6 +130,7 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, RewardAppl
         var context = await loader.LoadAsync(userId, ct);
         var quest = FindActive(context, questId);
         var now = clock.GetUtcNow();
+        var completedGoals = await rewardApplier.CompleteFinishedGoalsAsync(context, ct);
 
         quest.IsArchived = true;
         quest.ArchivedAt = now;
@@ -137,7 +138,7 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, RewardAppl
 
         db.XpEvents.AddRange(ProgressUpdater.Recalculate(context.Player, context.TodayLog, context.ActiveQuests, now));
         await db.SaveChangesAsync(ct);
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
+        var rewards = await rewardApplier.ApplyAsync(context, 0, ct, completedGoals);
         await tx.CommitAsync(ct);
         return rewards;
     }

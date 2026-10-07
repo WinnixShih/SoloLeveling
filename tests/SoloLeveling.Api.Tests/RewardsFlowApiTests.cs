@@ -232,6 +232,48 @@ public sealed class RewardsFlowApiTests(PostgresFixture fixture) : IDisposable
         (await db.Goals.SingleAsync(g => g.Id == goalId)).CompletedAt.Should().NotBeNull();
     }
 
+    /// <summary>起訖相同的 7 天閱讀目標：第 1 天達標，期間要到第 7 天才走完；排程在第 7 天早上已結算完前 6 天。</summary>
+    private async Task<(HttpClient Client, Guid GoalId)> SetupGoalFinishingTodayBySchedulerAsync()
+    {
+        var client = await _factory.RegisterAsync(seedBasicQuests: false);
+        var created = await CreateGoalAsync(client, new { category = "Reading", answers = new { currentMinutes = 30, targetMinutes = 30, lengthDays = 7 } });
+        var goalId = created.GetProperty("goals")[0].GetProperty("id").GetGuid();
+        var readingId = created.GetProperty("goals")[0].GetProperty("quests")[0].GetProperty("id").GetGuid();
+        await PutProgressAsync(client, readingId, 30);
+        _factory.Clock.Advance(TimeSpan.FromDays(6));
+        var scheduler = new SettlementScheduler(
+            _factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            _factory.Clock,
+            NullLogger<SettlementScheduler>.Instance);
+        await scheduler.RunOnceAsync(CancellationToken.None);
+        return (client, goalId);
+    }
+
+    [Fact]
+    public async Task 排程已結算後的第一次讀取_補發當天走完期間的A箱_同日第二次讀取不再判定()
+    {
+        var (client, _) = await SetupGoalFinishingTodayBySchedulerAsync();
+
+        var first = await client.GetFromJsonAsync<JsonElement>("/api/v1/today");
+        _factory.Sql.Clear();
+        var second = await client.GetFromJsonAsync<JsonElement>("/api/v1/today");
+
+        Chests(first).Should().Contain("A:GoalCompleted");
+        Chests(second).Should().BeEmpty();
+        _factory.Sql.Count("FROM \"Achievements\"").Should().Be(0);
+    }
+
+    [Fact]
+    public async Task 目標走完期間當天直接封存_仍發A箱()
+    {
+        var (client, goalId) = await SetupGoalFinishingTodayBySchedulerAsync();
+
+        var response = await client.DeleteAsync($"/api/v1/goals/{goalId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Chests(await response.Content.ReadFromJsonAsync<JsonElement>()).Should().Contain("A:GoalCompleted");
+    }
+
     [Fact]
     public async Task 起訖相同的目標第一天達標_期間未走完不發A箱()
     {
