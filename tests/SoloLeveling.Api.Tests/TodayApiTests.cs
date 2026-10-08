@@ -244,7 +244,7 @@ public sealed class TodayApiTests(PostgresFixture fixture) : IDisposable
         var me = await client.GetFromJsonAsync<JsonElement>("/api/v1/me");
         me.GetProperty("player").GetProperty("displayStreak").GetInt32().Should().Be(1);
         me.GetProperty("player").GetProperty("bestStreak").GetInt32().Should().Be(1);
-        me.GetProperty("program").GetProperty("dayNumber").GetInt32().Should().Be(2);
+        me.GetProperty("activeGate").ValueKind.Should().Be(JsonValueKind.Null);
 
         var history = await client.GetFromJsonAsync<JsonElement>("/api/v1/history?from=2026-09-28&to=2026-09-29");
         history.GetArrayLength().Should().Be(2);
@@ -271,25 +271,5 @@ public sealed class TodayApiTests(PostgresFixture fixture) : IDisposable
         me.GetProperty("player").GetProperty("xp").GetInt32().Should().Be(0);
         var events = await client.GetFromJsonAsync<JsonElement>("/api/v1/xp-events");
         events.EnumerateArray().Should().ContainSingle(e => e.GetProperty("source").GetString() == "Penalty" && e.GetProperty("amount").GetInt32() == -15);
-    }
-
-    [Fact]
-    public async Task ProgramRestart_開新週期_不重置等級()
-    {
-        var client = await _factory.RegisterAsync();
-        var ids = await QuestIdsAsync(client);
-        await SetProgressAsync(client, ids[0], 1);
-        _factory.Clock.Advance(TimeSpan.FromDays(3));
-
-        var response = await client.PostAsync("/api/v1/program/restart", null);
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var program = await response.Content.ReadFromJsonAsync<JsonElement>();
-        program.GetProperty("cycle").GetInt32().Should().Be(2);
-        program.GetProperty("startDate").GetString().Should().Be("2026-10-01");
-        program.GetProperty("dayNumber").GetInt32().Should().Be(1);
-        var me = await client.GetFromJsonAsync<JsonElement>("/api/v1/me");
-        me.GetProperty("player").GetProperty("xp").GetInt32().Should().Be(20);
-        me.GetProperty("program").GetProperty("cycle").GetInt32().Should().Be(2);
     }
 }

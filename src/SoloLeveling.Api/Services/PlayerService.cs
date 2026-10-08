@@ -14,8 +14,9 @@ namespace SoloLeveling.Api.Services;
 /// <param name="db">DbContext。</param>
 /// <param name="loader">今日內容載入（含結算）。</param>
 /// <param name="rewardApplier">獎勵判定與持久化。</param>
+/// <param name="gateTracker">進行中的傳送門查詢。</param>
 /// <param name="clock">時間來源。</param>
-public class PlayerService(AppDbContext db, TodayContextLoader loader, RewardApplier rewardApplier, TimeProvider clock)
+public class PlayerService(AppDbContext db, TodayContextLoader loader, RewardApplier rewardApplier, GateTracker gateTracker, TimeProvider clock)
 {
     /// <summary>
     /// GET /me：先結算、套用獎勵，再回傳總覽。
@@ -165,13 +166,14 @@ public class PlayerService(AppDbContext db, TodayContextLoader loader, RewardApp
         await db.SaveChangesAsync(ct);
         var rewards = isRead
             ? await rewardApplier.ApplyOnReadAsync(context, ct)
-            : await rewardApplier.ApplyAsync(context, 0, ct);
-        var program = await db.Programs.AsNoTracking().SingleAsync(p => p.UserId == context.User.Id && p.IsActive, ct);
+            : await rewardApplier.ApplyAsync(context, ct);
+        // 在獎勵判定之後查：判定可能剛結束進行中的門
+        var activeGate = await gateTracker.LoadActiveAsync(context.User.Id, ct);
         await tx.CommitAsync(ct);
         return new MeResponse(
             context.User.ToDto(),
             context.Player.ToDto(context.TodayLog.IsCleared),
-            program.ToDto(context.Today),
+            activeGate?.Gate.ToDto(context.Today, activeGate.Misses),
             context.ActiveQuests.Count == 0,
             rewards);
     }

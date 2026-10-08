@@ -25,7 +25,7 @@ public class RewardsTests
         AchievementStats? stats = null,
         string[]? unlocked = null,
         int goals = 0,
-        int programs = 0)
+        GateRank? gate = null)
     {
         return new RewardInput(
             new PlayerSnapshot(beforeLevel),
@@ -34,7 +34,7 @@ public class RewardsTests
             new HashSet<string>(unlocked ?? Array.Empty<string>()),
             stats ?? AchievementStats.Empty,
             goals,
-            programs);
+            gate);
     }
 
     [Fact]
@@ -163,11 +163,40 @@ public class RewardsTests
     }
 
     [Fact]
-    public void Evaluate_完成66天週期_發S箱()
+    public void Evaluate_通關A級門_依等級表發S箱與A箱()
     {
-        var outcome = Rewards.Evaluate(Input(NewPlayer(), programs: 1));
+        var outcome = Rewards.Evaluate(Input(NewPlayer(), gate: GateRank.A));
 
-        outcome.Chests.Should().Equal(new ChestGrant(Rarity.S, ChestSource.ProgramCompleted));
+        outcome.Chests.Should().Equal(new ChestGrant(Rarity.S, ChestSource.Gate), new ChestGrant(Rarity.A, ChestSource.Gate));
+    }
+
+    [Fact]
+    public void Evaluate_沒有通關_不發傳送門寶箱()
+    {
+        Rewards.Evaluate(Input(NewPlayer())).Chests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Evaluate_首次通關E級門_發E箱並解鎖破繭加50金幣()
+    {
+        var stats = AchievementStats.Empty with { GateClears = new Dictionary<GateRank, int> { [GateRank.E] = 1 } };
+
+        var outcome = Rewards.Evaluate(Input(NewPlayer(), stats: stats, gate: GateRank.E));
+
+        outcome.Chests.Should().Equal(new ChestGrant(Rarity.E, ChestSource.Gate));
+        outcome.NewAchievements.Select(a => a.Key).Should().Equal("gate-e");
+        outcome.Coins.Should().Equal(new CoinGrant(Rewards.AchievementCoins, CoinSource.Achievement));
+    }
+
+    [Fact]
+    public void Evaluate_重複通關E級門_只發寶箱不再解鎖()
+    {
+        var stats = AchievementStats.Empty with { GateClears = new Dictionary<GateRank, int> { [GateRank.E] = 2 } };
+
+        var outcome = Rewards.Evaluate(Input(NewPlayer(), stats: stats, unlocked: ["gate-e"], gate: GateRank.E));
+
+        outcome.Chests.Should().Equal(new ChestGrant(Rarity.E, ChestSource.Gate));
+        outcome.NewAchievements.Should().BeEmpty();
     }
 
     [Fact]

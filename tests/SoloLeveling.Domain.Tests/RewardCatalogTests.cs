@@ -34,9 +34,9 @@ public class RewardCatalogTests
     }
 
     [Fact]
-    public void Achievements_共12個且鍵唯一()
+    public void Achievements_共17個且鍵唯一()
     {
-        Achievements.All.Should().HaveCount(12);
+        Achievements.All.Should().HaveCount(17);
         Achievements.All.Select(a => a.Key).Should().OnlyHaveUniqueItems();
         Achievements.Find("no-such").Should().BeNull();
     }
@@ -51,7 +51,12 @@ public class RewardCatalogTests
     [InlineData("screen-30", "手機克星", "手機克星", TitleSlot.Suffix)]
     [InlineData("exercise-1000", "百里", "百里行者", TitleSlot.Suffix)]
     [InlineData("reading-1000", "藏書", "藏書者", TitleSlot.Suffix)]
-    [InlineData("program-complete", "破繭", "破繭的", TitleSlot.Prefix)]
+    [InlineData("gate-e", "破繭", "破繭的", TitleSlot.Prefix)]
+    [InlineData("gate-d", "D 級獵人", "D 級獵人", TitleSlot.Suffix)]
+    [InlineData("gate-c", "C 級獵人", "C 級獵人", TitleSlot.Suffix)]
+    [InlineData("gate-b", "B 級獵人", "B 級獵人", TitleSlot.Suffix)]
+    [InlineData("gate-a", "A 級獵人", "A 級獵人", TitleSlot.Suffix)]
+    [InlineData("gate-s", "S 級獵人", "S 級獵人", TitleSlot.Suffix)]
     [InlineData("collector-10", "收藏家", "收藏家", TitleSlot.Suffix)]
     [InlineData("rank-s", "傳說", "傳說的", TitleSlot.Prefix)]
     public void Achievements_第一批的名稱字塊與槽位(string key, string name, string text, TitleSlot slot)
@@ -72,7 +77,12 @@ public class RewardCatalogTests
     [InlineData("screen-30", 30)]
     [InlineData("exercise-1000", 1000)]
     [InlineData("reading-1000", 1000)]
-    [InlineData("program-complete", 1)]
+    [InlineData("gate-e", 1)]
+    [InlineData("gate-d", 1)]
+    [InlineData("gate-c", 1)]
+    [InlineData("gate-b", 1)]
+    [InlineData("gate-a", 1)]
+    [InlineData("gate-s", 1)]
     [InlineData("collector-10", 10)]
     [InlineData("rank-s", 45)]
     public void Achievements_達到門檻才解鎖(string key, int target)
@@ -101,6 +111,20 @@ public class RewardCatalogTests
     {
         Leveling.RankOf(Achievements.SRankLevel).Rank.Should().Be("S");
         Leveling.RankOf(Achievements.SRankLevel - 1).Rank.Should().Be("A");
+    }
+
+    [Fact]
+    public void Gates_首次通關成就只看自己等級的通關次數()
+    {
+        foreach (var gate in Gates.All)
+        {
+            var achievement = Achievements.Find(gate.AchievementKey);
+            achievement.Should().NotBeNull();
+            var own = AchievementStats.Empty with { GateClears = new Dictionary<GateRank, int> { [gate.Rank] = 1 } };
+            var others = AchievementStats.Empty with { GateClears = Gates.All.Where(g => g.Rank != gate.Rank).ToDictionary(g => g.Rank, _ => 5) };
+            achievement!.IsMet(own).Should().BeTrue();
+            achievement!.IsMet(others).Should().BeFalse();
+        }
     }
 
     [Theory]
@@ -140,7 +164,8 @@ public class RewardCatalogTests
             "screen-30" => empty with { RoleStreaks = new Dictionary<QuestRole, int> { [QuestRole.ScreenTime] = value } },
             "exercise-1000" => empty with { RoleMinutes = new Dictionary<QuestRole, int> { [QuestRole.Exercise] = value } },
             "reading-1000" => empty with { RoleMinutes = new Dictionary<QuestRole, int> { [QuestRole.Reading] = value } },
-            "program-complete" => empty with { CompletedPrograms = value },
+            "gate-e" or "gate-d" or "gate-c" or "gate-b" or "gate-a" or "gate-s" =>
+                empty with { GateClears = new Dictionary<GateRank, int> { [Enum.Parse<GateRank>(key[^1..], ignoreCase: true)] = value } },
             "collector-10" => empty with { OwnedCardKinds = value },
             "rank-s" => empty with { PeakLevel = value },
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, "測試未涵蓋的成就"),

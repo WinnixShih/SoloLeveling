@@ -24,7 +24,7 @@ public record CardDto(string Id, string Name, Rarity Rarity, string Flavor, stri
 /// <param name="Slot">字塊位置。</param>
 public record UnlockedAchievementDto(string Key, string Name, string TitleText, TitleSlot Slot);
 
-/// <summary>本次請求產生的獎勵；前端依序顯示系統訊息：升級 → 晉階 → 寶箱 → 成就 → 保險卡生效。</summary>
+/// <summary>本次請求產生的獎勵；前端依序顯示系統訊息：升級 → 晉階 → 傳送門 → 寶箱 → 成就 → 保險卡生效。</summary>
 /// <param name="LevelsGained">相對請求開始時升了幾級（降級為 0）。</param>
 /// <param name="RankUps">新晉升到的階級代碼，依序。</param>
 /// <param name="NewChests">本次獲得的寶箱。</param>
@@ -33,6 +33,8 @@ public record UnlockedAchievementDto(string Key, string Name, string TitleText, 
 /// <param name="ShieldsGained">本次因晉階獲得的保險卡張數。</param>
 /// <param name="ShieldsUsed">尚未回報過的保險卡生效日期（可能來自排程結算），由舊到新。</param>
 /// <param name="ShieldCount">目前持有的保險卡張數。</param>
+/// <param name="GateCleared">本次通關的傳送門等級；沒有為 null。</param>
+/// <param name="GateFailed">本次因漏的天數超過上限而失敗的傳送門等級；沒有為 null（放棄不算）。</param>
 public record RewardsDto(
     int LevelsGained,
     List<string> RankUps,
@@ -41,7 +43,9 @@ public record RewardsDto(
     int CoinDelta,
     int ShieldsGained,
     List<DateOnly> ShieldsUsed,
-    int ShieldCount);
+    int ShieldCount,
+    GateRank? GateCleared,
+    GateRank? GateFailed);
 
 /// <summary>沒有其他內容的寫入回應（封存）只帶本次獎勵。</summary>
 /// <param name="Rewards">本次獎勵。</param>

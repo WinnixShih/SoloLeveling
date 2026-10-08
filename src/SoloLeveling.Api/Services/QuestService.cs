@@ -58,7 +58,7 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, RewardAppl
 
         db.XpEvents.AddRange(ProgressUpdater.Recalculate(context.Player, context.TodayLog, context.ActiveQuests, clock.GetUtcNow()));
         await db.SaveChangesAsync(ct);
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
+        var rewards = await rewardApplier.ApplyAsync(context, ct);
         await tx.CommitAsync(ct);
         return quest.ToDto() with { Rewards = rewards };
     }
@@ -96,7 +96,7 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, RewardAppl
             quest.StatType = request.StatType;
             quest.Difficulty = request.Difficulty;
             await db.SaveChangesAsync(ct);
-            var lockedRewards = await rewardApplier.ApplyAsync(context, 0, ct);
+            var lockedRewards = await rewardApplier.ApplyAsync(context, ct);
             await tx.CommitAsync(ct);
             return quest.ToDto() with { Rewards = lockedRewards };
         }
@@ -111,7 +111,7 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, RewardAppl
         Apply(quest, request);
         db.XpEvents.AddRange(ProgressUpdater.Recalculate(context.Player, context.TodayLog, context.ActiveQuests, now));
         await db.SaveChangesAsync(ct);
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
+        var rewards = await rewardApplier.ApplyAsync(context, ct);
         await tx.CommitAsync(ct);
         return quest.ToDto() with { Rewards = rewards };
     }
@@ -138,7 +138,7 @@ public class QuestService(AppDbContext db, TodayContextLoader loader, RewardAppl
 
         db.XpEvents.AddRange(ProgressUpdater.Recalculate(context.Player, context.TodayLog, context.ActiveQuests, now));
         await db.SaveChangesAsync(ct);
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct, completedGoals);
+        var rewards = await rewardApplier.ApplyAsync(context, ct, completedGoals);
         await tx.CommitAsync(ct);
         return rewards;
     }

@@ -143,11 +143,11 @@ public enum ChestSource
     /// <summary>目標完成（A）。</summary>
     GoalCompleted = 5,
 
-    /// <summary>66 天週期完成（S）。</summary>
-    ProgramCompleted = 6,
-
     /// <summary>商店購買（E）。</summary>
     Purchase = 7,
+
+    /// <summary>傳送門通關；等級依門的等級表（見 <see cref="Gates"/>）。</summary>
+    Gate = 8,
 }
 
 /// <summary>

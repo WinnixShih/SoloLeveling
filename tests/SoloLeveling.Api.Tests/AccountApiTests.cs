@@ -157,13 +157,8 @@ public sealed class AccountApiTests(PostgresFixture fixture) : IDisposable
         player.GetProperty("bestStreak").GetInt32().Should().Be(0);
         player.GetProperty("totalCompleted").GetInt32().Should().Be(0);
 
-        var program = body.GetProperty("program");
-        program.GetProperty("cycle").GetInt32().Should().Be(1);
-        program.GetProperty("dayNumber").GetInt32().Should().Be(1);
-        program.GetProperty("lengthDays").GetInt32().Should().Be(66);
-        program.GetProperty("isCompleted").GetBoolean().Should().BeFalse();
-        // 2026-09-28 10:00 UTC → 台北 18:00，同日
-        program.GetProperty("startDate").GetString().Should().Be("2026-09-28");
+        // 註冊不自動開傳送門
+        body.GetProperty("activeGate").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
     [Fact]

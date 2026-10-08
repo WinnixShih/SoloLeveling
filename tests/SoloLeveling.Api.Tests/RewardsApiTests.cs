@@ -243,7 +243,7 @@ public sealed class RewardsApiTests(PostgresFixture fixture) : IDisposable
     }
 
     [Fact]
-    public async Task GetRewards_列出12個成就與進度_新帳號皆未解鎖()
+    public async Task GetRewards_列出17個成就與進度_新帳號皆未解鎖()
     {
         var (client, _) = await RegisterAsync();
         var quests = await client.GetFromJsonAsync<JsonElement>("/api/v1/quests");
@@ -252,7 +252,7 @@ public sealed class RewardsApiTests(PostgresFixture fixture) : IDisposable
         var rewards = await client.GetFromJsonAsync<JsonElement>("/api/v1/rewards");
 
         var achievements = rewards.GetProperty("achievements").EnumerateArray().ToList();
-        achievements.Should().HaveCount(12);
+        achievements.Should().HaveCount(17);
         achievements.Should().OnlyContain(a => !a.GetProperty("unlocked").GetBoolean());
         var hundred = achievements.Single(a => a.GetProperty("key").GetString() == "quests-100");
         hundred.GetProperty("progress").GetInt32().Should().Be(1);

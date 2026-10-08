@@ -17,7 +17,8 @@ public sealed record RewardState(AchievementStats Stats, IReadOnlySet<string> Un
 /// 批次查出成就統計（固定 7 次查詢，不隨任務數增加）。必須在本次請求的修改 SaveChanges 之後呼叫，查詢才看得到今天的進度與新建的目標。
 /// </summary>
 /// <param name="db">DbContext。</param>
-public class RewardStatsLoader(AppDbContext db)
+/// <param name="gateTracker">傳送門查詢（各等級通關次數）。</param>
+public class RewardStatsLoader(AppDbContext db, GateTracker gateTracker)
 {
     /// <summary>
     /// 載入統計。
@@ -73,7 +74,7 @@ public class RewardStatsLoader(AppDbContext db)
             .ToDictionary(g => g.Key, g => (int)Math.Floor(g.Sum(r => minutesByQuest.GetValueOrDefault(r.Id))));
 
         var ownedCardKinds = await db.OwnedCards.CountAsync(c => c.UserId == userId, ct);
-        var completedPrograms = await db.Programs.CountAsync(p => p.UserId == userId && p.CompletedAt != null, ct);
+        var gateClears = await gateTracker.LoadClearCountsAsync(userId, ct);
         var unlocked = await db.Achievements.Where(a => a.UserId == userId).Select(a => a.Key).ToListAsync(ct);
 
         var stats = new AchievementStats(
@@ -83,7 +84,7 @@ public class RewardStatsLoader(AppDbContext db)
             roleStreaks,
             roleMinutes,
             ownedCardKinds,
-            completedPrograms,
+            gateClears,
             Math.Max(player.PeakLevel, player.Level));
         return new RewardState(stats, unlocked.ToHashSet());
     }

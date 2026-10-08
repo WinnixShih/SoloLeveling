@@ -31,7 +31,7 @@ public sealed record CoinGrant(int Amount, CoinSource Source);
 /// <param name="UnlockedKeys">已解鎖的成就鍵。</param>
 /// <param name="Stats">成就統計（反映本次修改）。</param>
 /// <param name="CompletedGoals">本次請求新完成的目標數。</param>
-/// <param name="CompletedPrograms">本次請求新完成的 66 天週期數。</param>
+/// <param name="ClearedGate">本次請求通關的傳送門等級；沒有為 null。</param>
 public sealed record RewardInput(
     PlayerSnapshot Before,
     Player Player,
@@ -39,7 +39,7 @@ public sealed record RewardInput(
     IReadOnlySet<string> UnlockedKeys,
     AchievementStats Stats,
     int CompletedGoals,
-    int CompletedPrograms);
+    GateRank? ClearedGate);
 
 /// <summary>
 /// 獎勵判定的結果；由呼叫端套用到實體並持久化。
@@ -47,7 +47,7 @@ public sealed record RewardInput(
 /// <param name="LevelsGained">相對請求開始時升了幾級（降級為 0），僅供顯示。</param>
 /// <param name="NewPeakLevel">更新後的最高等級。</param>
 /// <param name="RankUps">新晉升到的階級代碼，依序。</param>
-/// <param name="Chests">要建立的寶箱，依序：升級 E、晉階 C、連續 7／30、目標、週期。</param>
+/// <param name="Chests">要建立的寶箱，依序：升級 E、晉階 C、連續 7／30、目標、傳送門。</param>
 /// <param name="NewAchievements">新解鎖的成就。</param>
 /// <param name="Coins">金幣變動：先達標金幣，再成就金幣。</param>
 /// <param name="ShieldsGained">要加的保險卡張數（已受上限截斷）。</param>
@@ -112,7 +112,10 @@ public static class Rewards
         }
 
         chests.AddRange(Enumerable.Repeat(new ChestGrant(Rarity.A, ChestSource.GoalCompleted), input.CompletedGoals));
-        chests.AddRange(Enumerable.Repeat(new ChestGrant(Rarity.S, ChestSource.ProgramCompleted), input.CompletedPrograms));
+        if (input.ClearedGate is { } gate)
+        {
+            chests.AddRange(Gates.Of(gate).Chests.Select(rarity => new ChestGrant(rarity, ChestSource.Gate)));
+        }
 
         var coins = new List<CoinGrant>();
         var log = input.TodayLog;

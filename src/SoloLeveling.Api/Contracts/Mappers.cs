@@ -1,7 +1,6 @@
 using SoloLeveling.Domain;
 using SoloLeveling.Domain.Entities;
 using SoloLeveling.Domain.Rules;
-using ProgramEntity = SoloLeveling.Domain.Entities.Program;
 
 namespace SoloLeveling.Api.Contracts;
 
@@ -52,14 +51,14 @@ public static class Mappers
             pinned);
     }
 
-    /// <summary>66 天計畫；dayNumber 以今日計算。</summary>
-    /// <param name="program">計畫實體。</param>
+    /// <summary>進行中的傳送門；dayNumber 以今日計算（見 <see cref="GateRules.DayNumber"/>）。</summary>
+    /// <param name="gate">門。</param>
     /// <param name="today">使用者時區的今日。</param>
+    /// <param name="misses">已漏天數。</param>
     /// <returns>DTO。</returns>
-    public static ProgramDto ToDto(this ProgramEntity program, DateOnly today)
+    public static ActiveGateDto ToDto(this Gate gate, DateOnly today, int misses)
     {
-        var dayNumber = today.DayNumber - program.StartDate.DayNumber + 1;
-        return new ProgramDto(program.StartDate, program.Cycle, dayNumber, program.LengthDays, dayNumber > program.LengthDays);
+        return new ActiveGateDto(gate.Rank, gate.StartDate, GateRules.DayNumber(gate, today), gate.LengthDays, misses, gate.AllowedMisses, gate.Status);
     }
 
     /// <summary>寶箱。</summary>

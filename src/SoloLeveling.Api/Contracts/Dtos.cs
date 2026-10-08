@@ -77,31 +77,16 @@ public record PlayerDto(
     string ThemeKey,
     CardDto? PinnedCard);
 
-/// <summary>66 天計畫。</summary>
-/// <param name="StartDate">起始日。</param>
-/// <param name="Cycle">第幾週期。</param>
-/// <param name="DayNumber">今日是第幾天（從 1 起）。</param>
-/// <param name="LengthDays">週期長度。</param>
-/// <param name="IsCompleted">是否已超過週期長度。</param>
-/// <param name="Rewards">本次請求的獎勵；只有 POST /program/restart 帶，其他地方為 null 並從 JSON 省略。</param>
-public record ProgramDto(
-    DateOnly StartDate,
-    int Cycle,
-    int DayNumber,
-    int LengthDays,
-    bool IsCompleted,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RewardsDto? Rewards = null);
-
 /// <summary>玩家總覽。</summary>
 /// <param name="User">使用者。</param>
 /// <param name="Player">玩家狀態。</param>
-/// <param name="Program">66 天計畫。</param>
+/// <param name="ActiveGate">進行中的傳送門；沒有時為 null。</param>
 /// <param name="NeedsOnboarding">是否需要引導（沒有任何未封存任務）。</param>
 /// <param name="Rewards">本次請求的獎勵。</param>
 public record MeResponse(
     UserDto User,
     PlayerDto Player,
-    ProgramDto Program,
+    ActiveGateDto? ActiveGate,
     bool NeedsOnboarding,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RewardsDto? Rewards = null);
 

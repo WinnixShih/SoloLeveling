@@ -13,7 +13,7 @@ namespace SoloLeveling.Api.Controllers;
 public class AuthController(AccountService accounts) : ControllerBase
 {
     /// <summary>
-    /// 註冊；成功後自動建立玩家、66 天週期與預設任務。
+    /// 註冊；成功後自動建立玩家，任務由引導流程建立。
     /// </summary>
     /// <param name="request">註冊請求。</param>
     /// <param name="ct">取消權杖。</param>
