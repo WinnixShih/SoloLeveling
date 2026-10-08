@@ -112,7 +112,7 @@
     Streak7: '連續 7 天',
     Streak30: '連續 30 天',
     GoalCompleted: '目標完成',
-    ProgramCompleted: '66 天完成',
+    Gate: '傳送門',
     Purchase: '商店',
   };
 
@@ -123,7 +123,7 @@
     return list;
   }
 
-  // 依序顯示：升級 → 晉階 → 寶箱 → 成就 → 保險卡生效
+  // 依序顯示：升級 → 晉階 → 傳送門（通關、失敗）→ 寶箱 → 成就 → 保險卡生效；傳送門的寶箱併在通關訊息裡
   function announceRewards(list, me) {
     if (!list || list.length === 0) {
       return;
@@ -132,6 +132,10 @@
     const rankUps = list.flatMap((r) => r.rankUps);
     const shieldsGained = list.reduce((sum, r) => sum + r.shieldsGained, 0);
     const chests = list.flatMap((r) => r.newChests);
+    const gateChests = chests.filter((c) => c.source === 'Gate');
+    const otherChests = chests.filter((c) => c.source !== 'Gate');
+    const gatesCleared = list.map((r) => r.gateCleared).filter(Boolean);
+    const gatesFailed = list.map((r) => r.gateFailed).filter(Boolean);
     const achievements = list.flatMap((r) => r.newAchievements);
     const shieldUses = list.filter((r) => r.shieldsUsed.length > 0);
     if (levels > 0) {
@@ -141,8 +145,14 @@
       UI.sysMessage(rankUps.map((rank) => `階級晉升：${rank} 級。`)
         .concat(shieldsGained > 0 ? [`獲得連勝保險卡 ${shieldsGained} 張。`] : []));
     }
-    if (chests.length > 0) {
-      UI.sysMessage(chests.map((c) => `獲得 ${c.rarity} 級寶箱（${CHEST_SOURCE_ZH[c.source] || c.source}）。`)
+    if (gatesCleared.length > 0) {
+      UI.sysMessage(gatesCleared.map((rank) => `${rank} 級傳送門攻略完成。`)
+        .concat(gateChests.map((c) => `獲得 ${c.rarity} 級寶箱。`))
+        .concat(gateChests.length > 0 ? ['前往「檔案」開啟。'] : []));
+    }
+    gatesFailed.forEach((rank) => UI.sysMessage([`${rank} 級傳送門攻略失敗：漏的天數超過上限。`, '可以到「進度」重新挑戰。']));
+    if (otherChests.length > 0) {
+      UI.sysMessage(otherChests.map((c) => `獲得 ${c.rarity} 級寶箱（${CHEST_SOURCE_ZH[c.source] || c.source}）。`)
         .concat(['前往「檔案」開啟。']));
     }
     achievements.forEach((a) => UI.sysMessage([`成就解鎖「${a.name}」。`, `獲得稱號字塊「${a.titleText}」。`]));
@@ -152,7 +162,7 @@
   /**
    * 比對前後兩次 /me 與 /today，依序送出系統訊息：任務完成、今日達標、目標升階，最後接 rewards 的獎勵訊息。
    * 任務完成與達標只在兩份今日資料同一天、且前一份明確記錄為未完成（=== false）時宣告；
-   * prevMe、prevToday 為 null（第一次看到這個帳號）時不宣告。rewards 預設取出 api() 累積的待顯示獎勵（升級、晉階、寶箱、成就、保險卡）。
+   * prevMe、prevToday 為 null（第一次看到這個帳號）時不宣告。rewards 預設取出 api() 累積的待顯示獎勵（升級、晉階、傳送門、寶箱、成就、保險卡）。
    */
   function announce(prevMe, prevToday, me, today, rewards = drainRewards()) {
     if (prevToday && prevToday.date === today.date) {
@@ -548,53 +558,41 @@
     return `第 ${day} 天 · ${date}（${weekdayOf(date)}）· ${status}`;
   }
 
-  async function renderProgress(isCurrent = () => true) {
-    renderHeader();
-    const { program, player } = state.me;
-    const today = state.today.date;
-    const end = addDays(program.startDate, program.lengthDays - 1);
-    const histEnd = end < today ? end : today;
-    const [history, week, quests] = await Promise.all([
-      api('GET', `/history?from=${program.startDate}&to=${histEnd}`),
-      api('GET', `/history?from=${addDays(today, -6)}&to=${today}`),
-      api('GET', '/quests'),
-    ]);
-    if (!isCurrent()) {
-      return;
+  // 進行中的門：等級、天數、已漏天數與門天數格的日曆；沒有進行中的門：列出六級門
+  function gateWindow(gates, history, today) {
+    const gate = gates.activeGate;
+    if (!gate) {
+      const rows = gates.tiers.map((t) => `
+        <div class="gate-tier ${t.unlocked ? '' : 'locked'}">
+          <div class="gate-main">
+            <b>${h(t.rank)} 級門</b>
+            <span class="sub">${h(t.lengthDays)} 天・最多漏 ${h(t.allowedMisses)} 天・已通關 ${h(t.clearCount)} 次</span>
+            <span class="sub">通關獎勵 ${t.chests.map((r) => `${h(r)} 級寶箱`).join('、')}・首次通關解鎖「${h(t.achievementName)}」</span>
+            ${t.unlocked ? '' : `<span class="sub">需先通關 ${h(t.requiredRank)} 級門</span>`}
+          </div>
+          ${t.unlocked
+            ? `<button type="button" class="btn btn-primary open-gate" data-rank="${h(t.rank)}">開門</button>`
+            : '<span class="gate-lock">LOCKED</span>'}
+        </div>`).join('');
+      return UI.win({ title: '傳送門', body: `<p class="sub">選一道已解鎖的門，開門當天為第 1 天。</p>${rows}` });
     }
     const byDate = Object.fromEntries(history.map((d) => [d.date, d]));
-    const cells = Array.from({ length: program.lengthDays }, (_, i) => {
-      const date = addDays(program.startDate, i);
+    const cells = Array.from({ length: gate.lengthDays }, (_, i) => {
+      const date = addDays(gate.startDate, i);
       const { cls, label } = dayStatus(date, today, byDate[date]);
       return `<button type="button" class="day ${cls}" data-day="${i + 1}" data-date="${date}" data-status="${label}" aria-pressed="false" aria-label="第 ${i + 1} 天，${date}，${label}">${i + 1}</button>`;
     });
-    const weekDates = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
-    const weekByDate = Object.fromEntries(week.map((d) => [d.date, new Set(d.doneQuestIds)]));
-    const weekRows = quests.map((q) => `
-      <tr>
-        <th scope="row" class="week-name">${h(q.name)}</th>
-        ${weekDates.map((d) => {
-          const on = weekByDate[d]?.has(q.id);
-          return `<td><span class="week-dot ${on ? 'on' : ''}" role="img" aria-label="${d} ${on ? '完成' : '未完成'}"></span></td>`;
-        }).join('')}
-      </tr>`).join('');
-    $view.innerHTML = `
-      ${UI.win({ title: '66 天計畫', body: `
-        <div class="ratio-row">
-          <span>第 ${program.cycle} 週期 · 第 <b class="num">${program.dayNumber}</b> 天${program.isCompleted ? '（已完成）' : ''}</span>
-          <span class="latin-label">DAY ${program.dayNumber} / ${program.lengthDays}</span>
-        </div>
-        <div class="cal" id="cal">${cells.join('')}</div>
-        <p class="cal-readout" id="cal-readout" aria-live="polite"></p>` })}
-      ${UI.win({ title: '五維屬性', body: `
-        <div class="stats">${STAT_ORDER.map((s) => `<div class="stat"><span class="latin-label">${s}</span><b class="num">${h(player.stats[s.toLowerCase()])}</b><span class="sub">${STAT_NAMES[s]}</span></div>`).join('')}</div>
-        <p class="sub stats-foot">累計完成 ${player.totalCompleted} 次 · 最佳連續 ${player.bestStreak} 天</p>` })}
-      ${UI.win({ title: '最近 7 天', body: `
-        <table class="week">
-          <thead><tr><th scope="col"><span class="sr-only">任務</span></th>${weekDates.map((d) => `<th scope="col" title="${d}"><span class="num">${d.slice(8)}</span><span class="sub">${weekdayOf(d)}</span></th>`).join('')}</tr></thead>
-          <tbody>${weekRows}</tbody>
-        </table>` })}`;
+    return UI.win({ title: '傳送門', body: `
+      <div class="ratio-row gate-head">
+        <span>${h(gate.rank)} 級門 · 第 <b class="num">${h(gate.dayNumber)}</b> / ${h(gate.lengthDays)} 天</span>
+        <span>已漏 <b class="num">${h(gate.misses)}</b> / ${h(gate.allowedMisses)} 天</span>
+      </div>
+      <div class="cal" id="cal">${cells.join('')}</div>
+      <p class="cal-readout" id="cal-readout" aria-live="polite"></p>
+      <div class="actions"><button id="abandon" type="button" class="btn btn-danger">放棄</button></div>` });
+  }
 
+  function bindCalendar() {
     const $cal = $view.querySelector('#cal');
     const $readout = $view.querySelector('#cal-readout');
     const select = (cell) => {
@@ -614,6 +612,80 @@
     } else {
       $readout.textContent = '點選格子查看日期與達標狀況。';
     }
+  }
+
+  // 開門單擊送出；放棄二段式確認。完成後重跑路由，由 loadToday 顯示回應帶回的獎勵
+  function bindGateActions(gates) {
+    const gate = gates.activeGate;
+    if (gate) {
+      bindCalendar();
+      UI.confirmButton($view.querySelector('#abandon'), '放棄', async () => {
+        const res = await api('POST', '/gates/active/abandon');
+        // 門若在放棄前已判定通關或失敗，改由獎勵訊息說明，不顯示放棄
+        if (!res.rewards.gateCleared && !res.rewards.gateFailed) {
+          UI.sysMessage([`已放棄 ${gate.rank} 級傳送門。`, '可以重新選一道門挑戰。']);
+        }
+        await route();
+      });
+      return;
+    }
+    $view.querySelectorAll('.open-gate').forEach((btn) => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const opened = await api('POST', '/gates', { rank: btn.dataset.rank });
+        UI.sysMessage([`${opened.rank} 級傳送門已開啟。`, `${opened.lengthDays} 天內最多可漏 ${opened.allowedMisses} 天，今天是第 1 天。`]);
+        await route();
+      } catch (err) {
+        showError(err);
+      } finally {
+        btn.disabled = false;
+      }
+    }));
+  }
+
+  async function renderProgress(isCurrent = () => true) {
+    renderHeader();
+    const { player } = state.me;
+    const today = state.today.date;
+    const gates = await api('GET', '/gates');
+    if (!isCurrent()) {
+      return;
+    }
+    // GET /gates 也會依讀取規則補判定通關與失敗，先顯示它帶回的獎勵
+    announceRewards(drainRewards(), state.me);
+    const gate = gates.activeGate;
+    const gateEnd = gate ? addDays(gate.startDate, gate.lengthDays - 1) : null;
+    const [history, week, quests] = await Promise.all([
+      gate && gate.startDate <= today
+        ? api('GET', `/history?from=${gate.startDate}&to=${gateEnd < today ? gateEnd : today}`)
+        : Promise.resolve([]),
+      api('GET', `/history?from=${addDays(today, -6)}&to=${today}`),
+      api('GET', '/quests'),
+    ]);
+    if (!isCurrent()) {
+      return;
+    }
+    const weekDates = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
+    const weekByDate = Object.fromEntries(week.map((d) => [d.date, new Set(d.doneQuestIds)]));
+    const weekRows = quests.map((q) => `
+      <tr>
+        <th scope="row" class="week-name">${h(q.name)}</th>
+        ${weekDates.map((d) => {
+          const on = weekByDate[d]?.has(q.id);
+          return `<td><span class="week-dot ${on ? 'on' : ''}" role="img" aria-label="${d} ${on ? '完成' : '未完成'}"></span></td>`;
+        }).join('')}
+      </tr>`).join('');
+    $view.innerHTML = `
+      ${gateWindow(gates, history, today)}
+      ${UI.win({ title: '五維屬性', body: `
+        <div class="stats">${STAT_ORDER.map((s) => `<div class="stat"><span class="latin-label">${s}</span><b class="num">${h(player.stats[s.toLowerCase()])}</b><span class="sub">${STAT_NAMES[s]}</span></div>`).join('')}</div>
+        <p class="sub stats-foot">累計完成 ${player.totalCompleted} 次 · 最佳連續 ${player.bestStreak} 天</p>` })}
+      ${UI.win({ title: '最近 7 天', body: `
+        <table class="week">
+          <thead><tr><th scope="col"><span class="sr-only">任務</span></th>${weekDates.map((d) => `<th scope="col" title="${d}"><span class="num">${d.slice(8)}</span><span class="sub">${weekdayOf(d)}</span></th>`).join('')}</tr></thead>
+          <tbody>${weekRows}</tbody>
+        </table>` })}`;
+    bindGateActions(gates);
   }
 
   /* ---------- settings ---------- */
@@ -654,7 +726,7 @@
     }
     const goals = goalsRes.goals;
     const activeCategories = goals.map((g) => g.category);
-    const { player, user, program } = state.me;
+    const { player, user } = state.me;
     const goalList = goals.length ? goals.map((g) => `
       <div class="goal-row" data-id="${g.id}">
         <div class="goal-main">
@@ -688,9 +760,6 @@
         <div id="quest-admin-list">${questList || '<p class="sub">沒有一般任務</p>'}</div>
         <div id="quest-editor" class="quest-editor"></div>
         <div class="actions"><button id="add-quest" type="button" class="btn btn-primary">＋ 新增任務</button></div>` })}
-      ${UI.win({ title: '66 天計畫', body: `
-        <p>目前第 ${program.cycle} 週期，自 <span class="num">${h(program.startDate)}</span> 起，第 ${program.dayNumber} 天。</p>
-        <div class="actions"><button id="restart" type="button" class="btn btn-danger">開新 66 天</button></div>` })}
       ${UI.win({ title: '帳號', body: `
         <p class="account">${h(user.email)}<span class="sub">時區 ${h(user.timeZoneId)}</span></p>
         <div class="actions"><button id="logout" type="button" class="btn btn-ghost">登出</button></div>` })}`;
@@ -781,11 +850,6 @@
       await refresh();
     }));
     $view.querySelector('#add-goal').addEventListener('click', () => renderOnboarding({ single: true, excluded: activeCategories, isCurrent: onSettings }));
-    UI.confirmButton($view.querySelector('#restart'), '開新 66 天', async () => {
-      await api('POST', '/program/restart');
-      UI.sysMessage(['新的 66 天計畫已開始。']);
-      await refresh();
-    });
     $view.querySelector('#logout').addEventListener('click', logout);
   }
 

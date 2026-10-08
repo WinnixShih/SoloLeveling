@@ -150,7 +150,7 @@
 
   /**
    * 產生狀態面板的 HTML。數值全部取自 API 回應，不自行計算等級或 EXP。
-   * 完整版另顯示名稱、稱號與數據籤；me.player 帶有 coins 或 shieldCount（數字）時才顯示對應的籤。
+   * 完整版另顯示名稱、稱號與數據籤；me.player 帶有 coins 或 shieldCount（數字）時才顯示對應的籤，me.activeGate 有值時顯示傳送門籤。
    * @param {{ me: object, today?: object|null, compact?: boolean }} options me 為 GET /me 回應；today 為 GET /today 回應，有值時顯示今日達成率；compact 為 true 時只顯示等級、EXP 條與階級
    * @returns {string} 狀態面板 HTML
    */
@@ -178,6 +178,10 @@
     }
     if (typeof p.shieldCount === 'number') {
       chips.push(`<span class="chip"><span class="chip-dot ok"></span>保險卡 <b>${h(p.shieldCount)}</b></span>`);
+    }
+    if (me.activeGate) {
+      const g = me.activeGate;
+      chips.push(`<span class="chip"><span class="chip-dot"></span>${h(g.rank)} 級門 <b>${h(g.dayNumber)}/${h(g.lengthDays)}</b>・漏 <b>${h(g.misses)}/${h(g.allowedMisses)}</b></span>`);
     }
     if (p.hardMode) {
       chips.push('<span class="chip"><span class="chip-dot bad"></span>困難模式</span>');

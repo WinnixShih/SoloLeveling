@@ -7,7 +7,7 @@
     Streak7: '連續 7 天',
     Streak30: '連續 30 天',
     GoalCompleted: '目標完成',
-    ProgramCompleted: '66 天完成',
+    Gate: '傳送門',
     Purchase: '商店',
   };
   const THEMES = [
