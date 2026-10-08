@@ -10,7 +10,7 @@ namespace SoloLeveling.Api.Services;
 /// 進行中的門與目前已漏的天數。
 /// </summary>
 /// <param name="Gate">門（已被 DbContext 追蹤）。</param>
-/// <param name="Misses">門期間內已結算且未達標的天數。</param>
+/// <param name="Misses">門期間內已結算日子中未達標的天數（沒有紀錄的日子也算）。</param>
 public sealed record ActiveGateState(Gate Gate, int Misses);
 
 /// <summary>
@@ -26,7 +26,7 @@ public sealed record GateResolution(GateRank? Cleared, GateRank? Failed, ActiveG
 }
 
 /// <summary>
-/// 傳送門的查詢與判定。已漏天數每次由 DailyLogs 一次 COUNT 算出，不存欄位；通關或失敗一經寫入就不再判定。
+/// 傳送門的查詢與判定。已漏天數每次由已結算天數減去 DailyLogs 一次 COUNT 的達標天數算出，不存欄位；通關或失敗一經寫入就不再判定。
 /// 必須在呼叫端開啟的交易內、<see cref="TodayContextLoader.LoadAsync"/> 之後使用。
 /// </summary>
 /// <param name="db">DbContext。</param>
@@ -35,12 +35,16 @@ public class GateTracker(AppDbContext db, TimeProvider clock)
 {
     /// <summary>
     /// 載入進行中的門與已漏天數（兩次查詢，不隨天數增加）。
+    /// 已漏天數 = 門期間內已結算的天數 − 已結算且達標的紀錄數：長期未登入時結算只補跑最近
+    /// <see cref="Settlement.MaxCatchUpDays"/> 天，更早的日子沒有紀錄，必須當成漏掉，否則會誤判通關。
+    /// 今日尚未結算，不列入。
     /// </summary>
-    /// <param name="userId">使用者 ID。</param>
+    /// <param name="player">玩家（須已結算，<see cref="Player.LastSettledDate"/> 為最新值）。</param>
     /// <param name="ct">取消權杖。</param>
     /// <returns>進行中的門；沒有為 null。</returns>
-    public async Task<ActiveGateState?> LoadActiveAsync(Guid userId, CancellationToken ct)
+    public async Task<ActiveGateState?> LoadActiveAsync(Player player, CancellationToken ct)
     {
+        var userId = player.UserId;
         var gate = await db.Gates.SingleOrDefaultAsync(g => g.UserId == userId && g.Status == GateStatus.Active, ct);
         if (gate is null)
         {
@@ -49,10 +53,17 @@ public class GateTracker(AppDbContext db, TimeProvider clock)
 
         var startDate = gate.StartDate;
         var lastDay = GateRules.LastDay(gate);
-        var misses = await db.DailyLogs.CountAsync(
-            l => l.UserId == userId && l.Date >= startDate && l.Date <= lastDay && l.IsSettled && !l.IsCleared,
+        if (player.LastSettledDate is not { } lastSettled || lastSettled < startDate)
+        {
+            return new ActiveGateState(gate, 0);
+        }
+
+        var settledEnd = lastSettled < lastDay ? lastSettled : lastDay;
+        var settledDays = settledEnd.DayNumber - startDate.DayNumber + 1;
+        var clearedDays = await db.DailyLogs.CountAsync(
+            l => l.UserId == userId && l.Date >= startDate && l.Date <= settledEnd && l.IsSettled && l.IsCleared,
             ct);
-        return new ActiveGateState(gate, misses);
+        return new ActiveGateState(gate, settledDays - clearedDays);
     }
 
     /// <summary>
@@ -63,7 +74,7 @@ public class GateTracker(AppDbContext db, TimeProvider clock)
     /// <returns>判定結果；沒有進行中的門回 <see cref="GateResolution.None"/>。</returns>
     public async Task<GateResolution> ResolveAsync(TodayContext context, CancellationToken ct)
     {
-        var active = await LoadActiveAsync(context.User.Id, ct);
+        var active = await LoadActiveAsync(context.Player, ct);
         if (active is null)
         {
             return GateResolution.None;

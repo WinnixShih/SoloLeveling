@@ -40,7 +40,7 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 - **Player.Coins 的任何變動都必須對應一筆 CoinEvent，一律經 `Wallet.Change`／`Wallet.Spend`。** 不要直接改 `Player.Coins`（測試種資料除外）。
 - **會改玩家狀態的端點在第一次 `SaveChangesAsync` 之後呼叫一次 `RewardApplier.ApplyAsync`，再 commit。** 它會查統計（要看得到本次修改）、寫寶箱／成就／金幣事件、回報保險卡事件並再存一次；回傳的 `RewardsDto` 放進回應的 `Rewards`。`GET /today`、`GET /me`、`GET /gates` 改呼叫 `ApplyOnReadAsync`（結算可能消耗保險卡）：本次結算新結算了日子、有待公告保險卡事件、或 `Player.RewardsEvaluatedDate` 不是今天時等同 `ApplyAsync`（因此每天至少完整判定一次），其餘略過統計與判定、回空獎勵；要封存目標／任務的端點須在封存前呼叫 `CompleteFinishedGoalsAsync` 並把結果傳給 `ApplyAsync` 的 `alreadyCompletedGoals`，否則走完期間當天封存會丟掉 A 箱；只讀的 `GET /rewards`（只結算）、`/cards`、`/goals`、`/history` 不呼叫，否則會吃掉待公告的保險卡事件。
 - **升級寶箱與晉階獎勵以 `Player.PeakLevel` 判定**，成就以「條件成立且未解鎖」判定；不要改成請求前後差，否則撤銷再完成可以刷寶箱。
-- **傳送門判定只在 `RewardApplier`（經 `GateTracker.ResolveAsync`）。** 已漏天數不存欄位，由 `GateTracker.LoadActiveAsync` 一次 COUNT 門期間內已結算且未達標的 DailyLog（保險卡保住的日子也算）；通關／失敗寫入後不再判定。開門與放棄要先 `ResolveAsync` 再檢查 409／404，並把結果傳給 `ApplyAsync` 的 `resolvedGate`，否則剛在結算後結束的門會擋住開門，或同一請求判定兩次。
+- **傳送門判定只在 `RewardApplier`（經 `GateTracker.ResolveAsync`）。** 已漏天數不存欄位，由 `GateTracker.LoadActiveAsync` 以「門期間內已結算的天數（到 `Player.LastSettledDate` 為止）− 一次 COUNT 已結算且達標的 DailyLog」算出；保險卡保住的日子、以及長期未登入超過結算補跑上限而沒有紀錄的日子都算漏；通關／失敗寫入後不再判定。開門與放棄要先 `ResolveAsync` 再檢查 409／404，並把結果傳給 `ApplyAsync` 的 `resolvedGate`，否則剛在結算後結束的門會擋住開門，或同一請求判定兩次。
 - **所有需要「今日」的端點都要先結算。** 服務層先 `db.Database.BeginTransactionAsync` → `TodayContextLoader.LoadAsync`（內部呼叫 `SettlementService.SettleAsync`，沿用呼叫端交易，以 `SELECT … FOR UPDATE` 鎖 Player 列）→ 修改 → `SaveChangesAsync` → `CommitAsync`。不需要今日的查詢（`QuestService.ListAsync`、`ReorderAsync`、`HistoryService.GetXpEventsAsync`）不結算。
 - **「今日」只能用 `UserClock.DateOf(now, user.TimeZoneId)` 決定。** 時間來源一律注入 `TimeProvider`（`clock.GetUtcNow()`），禁止直接用 `DateTime.Now`／`DateTime.UtcNow`。
 - **時間戳單位：** DB 是 `bigint` Unix 毫秒（`AppDbContext.ConfigureConventions` 的 value converter，全域套在 `DateTimeOffset`），API 出口是 Unix 秒（`Contracts/Mappers.ToUnixSeconds`）；只有這兩處可以換算。`DateOnly` 日期欄位（`StartDate`、`Date`、`LastSettledDate`）是 `date` 型別，API 用 `YYYY-MM-DD`。
@@ -86,6 +86,6 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 
 ## 目前狀態
 
-- MVP、引導式目標、系統介面改版、獎勵系統、傳送門挑戰完成，測試全綠（393 個：Domain 282 + Api 111）。
+- MVP、引導式目標、系統介面改版、獎勵系統、傳送門挑戰完成，測試全綠（395 個：Domain 282 + Api 113）。
 - GitHub 遠端 `origin` 是 `git@github.com:WinnixShih/SoloLeveling.git`，`main` 已 push 並追蹤 `origin/main`。
 - 待辦見 README「後續」：refresh token／登出即失效、前端離線暫存與 PWA 等。

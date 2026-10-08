@@ -168,7 +168,7 @@ public class PlayerService(AppDbContext db, TodayContextLoader loader, RewardApp
             ? await rewardApplier.ApplyOnReadAsync(context, ct)
             : await rewardApplier.ApplyAsync(context, ct);
         // 在獎勵判定之後查：判定可能剛結束進行中的門
-        var activeGate = await gateTracker.LoadActiveAsync(context.User.Id, ct);
+        var activeGate = await gateTracker.LoadActiveAsync(context.Player, ct);
         await tx.CommitAsync(ct);
         return new MeResponse(
             context.User.ToDto(),

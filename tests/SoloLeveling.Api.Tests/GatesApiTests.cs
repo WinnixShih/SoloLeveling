@@ -3,6 +3,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using SoloLeveling.Api.Services;
 using SoloLeveling.Domain;
 using SoloLeveling.Domain.Entities;
 
@@ -238,6 +241,59 @@ public sealed class GatesApiTests(PostgresFixture fixture) : IDisposable
 
         Rewards(again).GetProperty("gateCleared").ValueKind.Should().Be(JsonValueKind.Null);
         Chests(again).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task 長期未登入_門期間沒有紀錄的日子算漏_判定失敗而非通關()
+    {
+        var (client, _, userId) = await RegisterWithOneQuestAsync();
+        // 門期間早於結算補跑上限（400 天），補結算不會為這些日子建立 DailyLog
+        var gateStart = Day1.AddDays(-500);
+        await SeedGateAsync(userId, GateRank.E, gateStart);
+        await using (var db = fixture.CreateDbContext())
+        {
+            var player = await db.Players.SingleAsync(p => p.UserId == userId);
+            player.LastSettledDate = gateStart.AddDays(-1);
+            await db.SaveChangesAsync();
+        }
+
+        var me = await client.GetFromJsonAsync<JsonElement>("/api/v1/me");
+
+        Rewards(me).GetProperty("gateFailed").GetString().Should().Be("E");
+        Rewards(me).GetProperty("gateCleared").ValueKind.Should().Be(JsonValueKind.Null);
+        Chests(me).Should().NotContain(c => c.EndsWith(":Gate"));
+        (await LatestGateAsync(userId)).Status.Should().Be(GateStatus.Failed);
+    }
+
+    [Fact]
+    public async Task 排程已結算最後一天_下次讀取gates通關且只回報一次()
+    {
+        var (client, questId, userId) = await RegisterWithOneQuestAsync();
+        await SeedGateAsync(userId, GateRank.E, Day1);
+        await ClearDaysAsync(client, questId, 4);
+        // 第 5 天不登入：由排程結算（漏 1 天，未超過上限）
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+        var scheduler = new SettlementScheduler(
+            _factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            _factory.Clock,
+            NullLogger<SettlementScheduler>.Instance);
+        await scheduler.RunOnceAsync(CancellationToken.None);
+        await using (var db = fixture.CreateDbContext())
+        {
+            (await db.Players.SingleAsync(p => p.UserId == userId)).LastSettledDate.Should().Be(Day1.AddDays(4));
+        }
+
+        var gates = await client.GetFromJsonAsync<JsonElement>("/api/v1/gates");
+
+        Rewards(gates).GetProperty("gateCleared").GetString().Should().Be("E");
+        Chests(gates).Should().Contain("E:Gate");
+        gates.GetProperty("activeGate").ValueKind.Should().Be(JsonValueKind.Null);
+        (await LatestGateAsync(userId)).Status.Should().Be(GateStatus.Cleared);
+
+        var again = await client.GetFromJsonAsync<JsonElement>("/api/v1/gates");
+
+        Rewards(again).GetProperty("gateCleared").ValueKind.Should().Be(JsonValueKind.Null);
+        Chests(again).Should().NotContain("E:Gate");
     }
 
     [Fact]

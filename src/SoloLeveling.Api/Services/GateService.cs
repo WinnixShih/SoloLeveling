@@ -27,7 +27,7 @@ public class GateService(AppDbContext db, TodayContextLoader loader, RewardAppli
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var context = await loader.LoadAsync(userId, ct);
         var rewards = await rewardApplier.ApplyOnReadAsync(context, ct);
-        var active = await gateTracker.LoadActiveAsync(userId, ct);
+        var active = await gateTracker.LoadActiveAsync(context.Player, ct);
         var clearCounts = await gateTracker.LoadClearCountsAsync(userId, ct);
         await tx.CommitAsync(ct);
         return new GatesResponse(

@@ -99,7 +99,7 @@ flowchart LR
 | `Services/TodayService.cs` | 今日查詢、進度寫入、反思筆記；`Build` 組 `TodayResponse`（漸進任務加 `progression` 物件） |
 | `Services/HistoryService.cs` | 每日紀錄（區間 ≤ 100 天）與 EXP 流水（limit 夾在 1–200） |
 | `Services/GateService.cs` | `GET /gates`（走 `ApplyOnReadAsync`）、開門、放棄；開門與放棄先 `GateTracker.ResolveAsync` 再檢查 409／404，結果傳給 `ApplyAsync(resolvedGate:)` |
-| `Services/GateTracker.cs` | `LoadActiveAsync`（進行中的門＋一次 COUNT 算已漏天數）、`ResolveAsync`（`GateRules.Judge`，有結果就寫狀態並存檔）、`LoadClearCountsAsync`（各等級通關次數） |
+| `Services/GateTracker.cs` | `LoadActiveAsync`（進行中的門＋已結算天數減一次 COUNT 的達標天數算已漏天數，沒有紀錄的日子算漏）、`ResolveAsync`（`GateRules.Judge`，有結果就寫狀態並存檔）、`LoadClearCountsAsync`（各等級通關次數） |
 | `Services/RewardApplier.cs` | `ApplyAsync(context, ct, alreadyCompletedGoals = 0, resolvedGate = null)`：在第一次 SaveChanges 之後判定目標完成、判定傳送門（`GateTracker.ResolveAsync`）、查統計、`Rewards.Evaluate`、寫寶箱／成就／CoinEvent、回報保險卡事件，回傳含 `gateCleared`／`gateFailed` 的 `RewardsDto`；`ApplyOnReadAsync(context, ct)` 供 `GET /today`、`GET /me`、`GET /gates`，本日已完整判定過、無新結算且無待公告保險卡事件時略過判定回空獎勵；`CompleteFinishedGoalsAsync` 供封存前先標記完成的目標 |
 | `Services/RewardStatsLoader.cs` | 成就統計的批次查詢（最多 7 次，不隨任務數增加；傳送門通關次數經 `GateTracker`） |
 | `Services/RewardService.cs` | 獎勵總覽、開箱、圖鑑、商店 |
