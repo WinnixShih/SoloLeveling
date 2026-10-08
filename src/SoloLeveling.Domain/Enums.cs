@@ -236,3 +236,60 @@ public enum ShopItem
     /// <summary>主題色（需指定 themeKey）。</summary>
     Theme = 3,
 }
+
+/// <summary>
+/// 傳送門等級，與玩家階級同名；等級表見 <see cref="Gates"/>，DB 存字串。
+/// </summary>
+public enum GateRank
+{
+    /// <summary>E 級門。</summary>
+    E = 1,
+
+    /// <summary>D 級門。</summary>
+    D = 2,
+
+    /// <summary>C 級門。</summary>
+    C = 3,
+
+    /// <summary>B 級門。</summary>
+    B = 4,
+
+    /// <summary>A 級門。</summary>
+    A = 5,
+
+    /// <summary>S 級門。</summary>
+    S = 6,
+}
+
+/// <summary>
+/// 傳送門狀態；除了 <see cref="Active"/> 之外都是終局，寫入後不再改變。DB 存字串。
+/// </summary>
+public enum GateStatus
+{
+    /// <summary>進行中；每位使用者同時最多一道。</summary>
+    Active = 1,
+
+    /// <summary>通關。</summary>
+    Cleared = 2,
+
+    /// <summary>漏的天數超過上限而失敗。</summary>
+    Failed = 3,
+
+    /// <summary>玩家主動放棄。</summary>
+    Abandoned = 4,
+}
+
+/// <summary>
+/// 傳送門判定結果（見 <c>GateRules.Judge</c>）。
+/// </summary>
+public enum GateVerdict
+{
+    /// <summary>仍在進行中。</summary>
+    InProgress = 1,
+
+    /// <summary>通關。</summary>
+    Cleared = 2,
+
+    /// <summary>失敗。</summary>
+    Failed = 3,
+}
