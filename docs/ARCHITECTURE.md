@@ -207,7 +207,7 @@ flowchart LR
 - **路由**：hash 路由 `#login`、`#register`、`#onboarding`、`#today`、`#progress`、`#hunter`、`#settings`，監聽 `hashchange`；無 token 時一律顯示登入／註冊。底部導覽由 `app.js` 的 `NAV_ITEMS` 產生；導向用 `go(hash)`（hash 已相同時直接重跑路由）；快速連續切換時只有最後一次路由會寫入畫面。
 - **token**：存在 `localStorage` 的 `token`；API 回 401 時清除並導回 `#login`。
 - **資料流**：每次切換畫面先並行取 `GET /me` 與 `GET /today`；勾選或輸入進度時呼叫 `PUT /today/quests/{id}/progress`，以回應覆蓋今日資料，再重取 `/me` 更新等級與屬性。同一時間只送一個進度請求，連點時忽略後續點擊。前端不計算 EXP、等級、達標率。
-- **系統訊息**：成功與事件通知走 `UI.sysMessage`（排隊、3.2 秒或點擊關閉）。`api()` 把每個回應帶的 `rewards` 收進 `state.pendingRewards`，由 `announceRewards` 依序顯示一次：升級 → 晉階 → 寶箱 → 成就 → 保險卡生效（保險卡由排程消耗時，下一次請求帶回）。`announce(prevMe, prevToday, me, today, rewards)` 比對前後狀態宣告任務完成、今日達標、目標升階，最後接 `rewards` 的訊息（省略時取出 `state.pendingRewards`）；上一次看到的各漸進任務階段（連同等級）存在 `localStorage` 的 `seen:<userId>`，跨次開啟也能宣告目標升階；升級訊息只由 `rewards` 驅動。檔案頁的商店有保險卡與 E 級寶箱兩項，主題在設定頁購買與切換。
+- **系統訊息**：成功與事件通知走 `UI.sysMessage`（同時最多堆疊 3 則、其餘排隊不丟棄；每則 2.5 秒、相鄰自動消失至少間隔 0.5 秒，或點擊關閉該則）。`api()` 把每個回應帶的 `rewards` 收進 `state.pendingRewards`，由 `announceRewards` 依序顯示一次：升級 → 晉階 → 寶箱 → 成就 → 保險卡生效（保險卡由排程消耗時，下一次請求帶回）。`announce(prevMe, prevToday, me, today, rewards)` 比對前後狀態宣告任務完成、今日達標、目標升階，最後接 `rewards` 的訊息（省略時取出 `state.pendingRewards`）；上一次看到的各漸進任務階段（連同等級）存在 `localStorage` 的 `seen:<userId>`，跨次開啟也能宣告目標升階；升級訊息只由 `rewards` 驅動。檔案頁的商店有保險卡與 E 級寶箱兩項，主題在設定頁購買與切換。
 - **錯誤顯示**：`api()` 把錯誤回應與網路失敗轉成 `UI.ApiError`，由 `showError` 以紅色 toast 顯示 `error.message`；其他例外照常往上丟。
 
 ## 8. 容器化

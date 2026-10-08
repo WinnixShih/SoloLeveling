@@ -1,9 +1,11 @@
 /* SoloLeveling 共用介面元件：系統視窗、狀態面板、系統訊息、錯誤 toast、二段式確認與主題色。以 window.UI 匯出，供 app.js 與後續畫面共用；不呼叫 API、不處理路由。 */
 (() => {
   const ACCENTS = ['azure', 'violet', 'jade'];
-  const MESSAGE_MS = 3200;
+  // 系統訊息時序：每則出現後停留 MESSAGE_MS 自動消失；相鄰兩次自動消失至少間隔 MESSAGE_GAP_MS，避免同時消失；同時最多顯示 MAX_VISIBLE 則，其餘排隊不丟棄
+  const MESSAGE_MS = 2500;
+  const MESSAGE_GAP_MS = 500;
+  const MAX_VISIBLE = 3;
   const LEAVE_MS = 250;
-  const MAX_PENDING = 4;
   const TOAST_MS = 2600;
   const CONFIRM_MS = 3000;
 
@@ -39,8 +41,13 @@
   /* ---------- 系統訊息 ---------- */
   const pending = [];
   let host = null;
-  let showing = false;
+  let visibleCount = 0;
+  let lastDismissAt = 0;
 
+  /**
+   * 取得系統訊息的容器，第一次呼叫時建立並掛在 body 上。
+   * @returns {HTMLElement} 訊息容器
+   */
   function messageHost() {
     if (!host) {
       host = document.createElement('div');
@@ -52,13 +59,48 @@
     return host;
   }
 
-  function showNext() {
-    const lines = pending.shift();
-    if (!lines) {
-      showing = false;
-      return;
+  /**
+   * 有空位就從佇列依序補上訊息，直到滿 MAX_VISIBLE 則或佇列清空。
+   * @returns {void}
+   */
+  function fillSlots() {
+    while (visibleCount < MAX_VISIBLE && pending.length) {
+      showMessage(pending.shift());
     }
-    showing = true;
+  }
+
+  /**
+   * 移除一則訊息，並讓下方的訊息從原位置平滑上移（FLIP）。
+   * 減少動態設定下 transition 被關掉，訊息會直接跳到新位置。
+   * @param {HTMLElement} el 要移除的訊息
+   * @returns {void}
+   */
+  function removeMessage(el) {
+    const rest = Array.from(messageHost().children).filter((child) => child !== el);
+    const before = rest.map((child) => child.getBoundingClientRect().top);
+    el.remove();
+    rest.forEach((child, i) => {
+      const dy = before[i] - child.getBoundingClientRect().top;
+      if (dy) {
+        child.style.transition = 'none';
+        child.style.transform = `translateY(${dy}px)`;
+      }
+    });
+    void messageHost().offsetWidth;
+    rest.forEach((child) => {
+      child.style.transition = '';
+      child.style.transform = '';
+    });
+  }
+
+  /**
+   * 在堆疊底部顯示一則訊息並排定自動消失。
+   * 消失時間取「出現後 MESSAGE_MS」與「上一則排定消失後 MESSAGE_GAP_MS」較晚者；計時用固定 timeout，不依賴 transitionend。
+   * @param {string[]} lines 訊息的每一行
+   * @returns {void}
+   */
+  function showMessage(lines) {
+    visibleCount += 1;
     const el = document.createElement('div');
     el.className = 'sysmsg';
     const head = document.createElement('span');
@@ -82,8 +124,9 @@
       el.classList.remove('show');
       // 以固定時間等退場動畫，減少動態設定關掉 transition 時也會照常換下一則
       setTimeout(() => {
-        el.remove();
-        showNext();
+        removeMessage(el);
+        visibleCount -= 1;
+        fillSlots();
       }, LEAVE_MS);
     };
     el.addEventListener('click', close);
@@ -91,12 +134,15 @@
     // 先讓瀏覽器套用初始樣式，再加上 show 才會有進場動畫
     void el.offsetWidth;
     el.classList.add('show');
-    timer = setTimeout(close, MESSAGE_MS);
+    const now = Date.now();
+    const dismissAt = Math.max(now + MESSAGE_MS, lastDismissAt + MESSAGE_GAP_MS);
+    lastDismissAt = dismissAt;
+    timer = setTimeout(close, dismissAt - now);
   }
 
   /**
-   * 排隊顯示一則系統訊息；每則 3.2 秒自動消失或點擊關閉，依序顯示。
-   * 內容以純文字寫入，不解析 HTML。待顯示超過 4 則時丟掉最舊的，避免短時間大量觸發後訊息拖很久。
+   * 顯示一則系統訊息；同時最多堆疊 3 則（最舊在上），其餘排隊，不會丟棄。
+   * 每則出現後約 2.5 秒自動消失（相鄰兩則至少間隔 0.5 秒），點擊只關閉該則。內容以純文字寫入，不解析 HTML。
    * @param {string[]} lines 訊息的每一行；空陣列不顯示
    * @returns {void}
    */
@@ -106,12 +152,7 @@
       return;
     }
     pending.push(text);
-    if (pending.length > MAX_PENDING) {
-      pending.splice(0, pending.length - MAX_PENDING);
-    }
-    if (!showing) {
-      showNext();
-    }
+    fillSlots();
   }
 
   /* ---------- 錯誤 toast ---------- */
