@@ -40,6 +40,7 @@ builder.Services.AddScoped<PlayerService>();
 builder.Services.AddScoped<QuestService>();
 builder.Services.AddScoped<TodayService>();
 builder.Services.AddScoped<HistoryService>();
+builder.Services.AddScoped<GateService>();
 builder.Services.AddScoped<GoalService>();
 builder.Services.AddScoped<RewardService>();
 builder.Services.AddHostedService<SettlementScheduler>();

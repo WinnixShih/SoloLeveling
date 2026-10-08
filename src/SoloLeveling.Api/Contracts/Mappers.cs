@@ -61,6 +61,27 @@ public static class Mappers
         return new ActiveGateDto(gate.Rank, gate.StartDate, GateRules.DayNumber(gate, today), gate.LengthDays, misses, gate.AllowedMisses, gate.Status);
     }
 
+    /// <summary>等級表的一列；解鎖與通關次數依玩家的通關紀錄。</summary>
+    /// <param name="gate">等級定義。</param>
+    /// <param name="clearCounts">各等級通關次數。</param>
+    /// <returns>DTO。</returns>
+    /// <exception cref="InvalidOperationException">等級表的成就鍵不在成就目錄（目錄不一致的程式錯誤）。</exception>
+    public static GateTierDto ToDto(this GateDefinition gate, IReadOnlyDictionary<GateRank, int> clearCounts)
+    {
+        var achievement = Achievements.Find(gate.AchievementKey)
+            ?? throw new InvalidOperationException($"傳送門 {gate.Rank} 的成就鍵 {gate.AchievementKey} 不在成就目錄");
+        return new GateTierDto(
+            gate.Rank,
+            gate.LengthDays,
+            gate.AllowedMisses,
+            gate.Chests.ToList(),
+            achievement.Name,
+            achievement.TitleText,
+            gate.RequiredRank,
+            Gates.IsUnlocked(gate.Rank, clearCounts),
+            clearCounts.GetValueOrDefault(gate.Rank));
+    }
+
     /// <summary>寶箱。</summary>
     /// <param name="chest">寶箱實體。</param>
     /// <returns>DTO。</returns>

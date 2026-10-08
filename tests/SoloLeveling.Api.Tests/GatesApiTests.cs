@@ -99,6 +99,17 @@ public sealed class GatesApiTests(PostgresFixture fixture) : IDisposable
         return Rewards(response).GetProperty("newAchievements").EnumerateArray().Select(a => a.GetProperty("key").GetString()).ToList();
     }
 
+    private static async Task<HttpResponseMessage> OpenAsync(HttpClient client, object body)
+    {
+        return await client.PostAsJsonAsync("/api/v1/gates", body);
+    }
+
+    private static async Task<string?> ErrorCodeAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return body.GetProperty("error").GetProperty("code").GetString();
+    }
+
     [Fact]
     public async Task GetMe_新玩家_沒有進行中的門且獎勵帶傳送門欄位()
     {
@@ -227,5 +238,195 @@ public sealed class GatesApiTests(PostgresFixture fixture) : IDisposable
 
         Rewards(again).GetProperty("gateCleared").ValueKind.Should().Be(JsonValueKind.Null);
         Chests(again).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetGates_新玩家_列出六級門且只有E級解鎖()
+    {
+        var (client, _, _) = await RegisterWithOneQuestAsync();
+
+        var gates = await client.GetFromJsonAsync<JsonElement>("/api/v1/gates");
+
+        var tiers = gates.GetProperty("tiers").EnumerateArray().ToList();
+        tiers.Select(t => t.GetProperty("rank").GetString()).Should().Equal("E", "D", "C", "B", "A", "S");
+        tiers.Select(t => t.GetProperty("unlocked").GetBoolean()).Should().Equal(true, false, false, false, false, false);
+        tiers.Should().OnlyContain(t => t.GetProperty("clearCount").GetInt32() == 0);
+        tiers[0].GetProperty("requiredRank").ValueKind.Should().Be(JsonValueKind.Null);
+        tiers[0].GetProperty("achievementName").GetString().Should().Be("破繭");
+        tiers[1].GetProperty("requiredRank").GetString().Should().Be("E");
+        tiers[5].GetProperty("lengthDays").GetInt32().Should().Be(100);
+        tiers[5].GetProperty("allowedMisses").GetInt32().Should().Be(10);
+        tiers[5].GetProperty("chests").EnumerateArray().Select(c => c.GetString()).Should().Equal("S", "S", "S");
+        tiers[5].GetProperty("titleText").GetString().Should().Be("S 級獵人");
+        gates.GetProperty("activeGate").ValueKind.Should().Be(JsonValueKind.Null);
+        gates.TryGetProperty("rewards", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task OpenGate_E級_回第1天並出現在me與gates()
+    {
+        var (client, _, _) = await RegisterWithOneQuestAsync();
+
+        var response = await OpenAsync(client, new { rank = "E" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("rank").GetString().Should().Be("E");
+        body.GetProperty("startDate").GetString().Should().Be("2026-09-28");
+        body.GetProperty("dayNumber").GetInt32().Should().Be(1);
+        body.GetProperty("lengthDays").GetInt32().Should().Be(5);
+        body.GetProperty("misses").GetInt32().Should().Be(0);
+        body.GetProperty("allowedMisses").GetInt32().Should().Be(1);
+        body.GetProperty("status").GetString().Should().Be("Active");
+        body.TryGetProperty("rewards", out _).Should().BeTrue();
+        var me = await client.GetFromJsonAsync<JsonElement>("/api/v1/me");
+        me.GetProperty("activeGate").GetProperty("rank").GetString().Should().Be("E");
+        var gates = await client.GetFromJsonAsync<JsonElement>("/api/v1/gates");
+        gates.GetProperty("activeGate").GetProperty("rank").GetString().Should().Be("E");
+    }
+
+    [Fact]
+    public async Task OpenGate_未解鎖_回400GateLocked()
+    {
+        var (client, _, _) = await RegisterWithOneQuestAsync();
+
+        var response = await OpenAsync(client, new { rank = "D" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ErrorCodeAsync(response)).Should().Be("GateLocked");
+    }
+
+    [Fact]
+    public async Task OpenGate_已有進行中的門_回409GateInProgress()
+    {
+        var (client, _, _) = await RegisterWithOneQuestAsync();
+        (await OpenAsync(client, new { rank = "E" })).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var response = await OpenAsync(client, new { rank = "E" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await ErrorCodeAsync(response)).Should().Be("GateInProgress");
+    }
+
+    [Fact]
+    public async Task OpenGate_等級無效或缺漏_回400且不開門()
+    {
+        var (client, _, _) = await RegisterWithOneQuestAsync();
+
+        var numeric = await OpenAsync(client, new { rank = 9 });
+        var missing = await OpenAsync(client, new { });
+        var unknown = await OpenAsync(client, new { rank = "Z" });
+
+        numeric.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ErrorCodeAsync(numeric)).Should().Be("InvalidGateRank");
+        missing.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ErrorCodeAsync(missing)).Should().Be("InvalidGateRank");
+        unknown.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ErrorCodeAsync(unknown)).Should().Be("ValidationFailed");
+        var me = await client.GetFromJsonAsync<JsonElement>("/api/v1/me");
+        me.GetProperty("activeGate").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task OpenGate_台北使用者跨日_開門日為使用者時區的今日()
+    {
+        var (client, _, _) = await RegisterWithOneQuestAsync("Asia/Taipei");
+        // 10:00 UTC 起撥 7 小時 → 17:00 UTC，台北已是 2026-09-29 01:00
+        _factory.Clock.Advance(TimeSpan.FromHours(7));
+
+        var response = await OpenAsync(client, new { rank = "E" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("startDate").GetString().Should().Be("2026-09-29");
+        body.GetProperty("dayNumber").GetInt32().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task OpenGate_通關低一級後_依序解鎖到S級()
+    {
+        var (client, _, userId) = await RegisterWithOneQuestAsync();
+        foreach (var rank in new[] { GateRank.E, GateRank.D, GateRank.C, GateRank.B, GateRank.A })
+        {
+            await SeedGateAsync(userId, rank, Day1, GateStatus.Cleared);
+        }
+
+        var gates = await client.GetFromJsonAsync<JsonElement>("/api/v1/gates");
+
+        var tiers = gates.GetProperty("tiers").EnumerateArray().ToList();
+        tiers.Should().OnlyContain(t => t.GetProperty("unlocked").GetBoolean());
+        tiers.Select(t => t.GetProperty("clearCount").GetInt32()).Should().Equal(1, 1, 1, 1, 1, 0);
+        var response = await OpenAsync(client, new { rank = "S" });
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("lengthDays").GetInt32().Should().Be(100);
+        body.GetProperty("allowedMisses").GetInt32().Should().Be(10);
+    }
+
+    [Fact]
+    public async Task OpenGate_前一道門最後一天已結算_同一請求先補通關再開下一級()
+    {
+        var (client, questId, _) = await RegisterWithOneQuestAsync();
+        (await OpenAsync(client, new { rank = "E" })).StatusCode.Should().Be(HttpStatusCode.OK);
+        await ClearDaysAsync(client, questId, 4);
+        await _factory.AdvanceAsync(client, TimeSpan.FromDays(1));
+
+        var response = await OpenAsync(client, new { rank = "D" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("rank").GetString().Should().Be("D");
+        body.GetProperty("startDate").GetString().Should().Be("2026-10-03");
+        body.GetProperty("dayNumber").GetInt32().Should().Be(1);
+        Rewards(body).GetProperty("gateCleared").GetString().Should().Be("E");
+        Chests(body).Should().Contain("E:Gate");
+        AchievementKeys(body).Should().Contain("gate-e");
+    }
+
+    [Fact]
+    public async Task Abandon_沒有進行中的門_回404NoActiveGate()
+    {
+        var (client, _, _) = await RegisterWithOneQuestAsync();
+
+        var response = await client.PostAsync("/api/v1/gates/active/abandon", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await ErrorCodeAsync(response)).Should().Be("NoActiveGate");
+    }
+
+    [Fact]
+    public async Task Abandon_放棄後可立刻重開且不算失敗也不發寶箱()
+    {
+        var (client, _, userId) = await RegisterWithOneQuestAsync();
+        (await OpenAsync(client, new { rank = "E" })).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var response = await client.PostAsync("/api/v1/gates/active/abandon", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Rewards(body).GetProperty("gateFailed").ValueKind.Should().Be(JsonValueKind.Null);
+        Rewards(body).GetProperty("gateCleared").ValueKind.Should().Be(JsonValueKind.Null);
+        Chests(body).Should().NotContain(c => c.EndsWith(":Gate"));
+        var stored = await LatestGateAsync(userId);
+        stored.Status.Should().Be(GateStatus.Abandoned);
+        stored.EndedAt.Should().NotBeNull();
+        (await OpenAsync(client, new { rank = "E" })).StatusCode.Should().Be(HttpStatusCode.OK);
+        var gates = await client.GetFromJsonAsync<JsonElement>("/api/v1/gates");
+        gates.GetProperty("tiers")[0].GetProperty("clearCount").GetInt32().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Abandon_門已在結算後失敗_回200帶失敗結果不改成放棄()
+    {
+        var (client, _, userId) = await RegisterWithOneQuestAsync();
+        (await OpenAsync(client, new { rank = "E" })).StatusCode.Should().Be(HttpStatusCode.OK);
+        await _factory.AdvanceAsync(client, TimeSpan.FromDays(2));
+
+        var response = await client.PostAsync("/api/v1/gates/active/abandon", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Rewards(body).GetProperty("gateFailed").GetString().Should().Be("E");
+        (await LatestGateAsync(userId)).Status.Should().Be(GateStatus.Failed);
     }
 }
