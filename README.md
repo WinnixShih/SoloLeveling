@@ -1,6 +1,6 @@
 # SoloLeveling
 
-習慣養成 App 的 MVP 後端＋簡易 Web 前端：每天完成自訂任務累積 EXP、升級、養五維屬性，配合 66 天計畫與連續達標紀錄。完整規則見 [docs/SPEC.md](docs/SPEC.md)。
+習慣養成 App 的 MVP 後端＋簡易 Web 前端：每天完成自訂任務累積 EXP、升級、養五維屬性，配合傳送門挑戰與連續達標紀錄。完整規則見 [docs/SPEC.md](docs/SPEC.md)。
 
 ## 技術
 
@@ -95,8 +95,11 @@ curl -s -X PATCH localhost:8080/api/v1/me -H "Authorization: Bearer $TOKEN" \
 curl -s 'localhost:8080/api/v1/history?from=2026-09-01&to=2026-09-30' -H "Authorization: Bearer $TOKEN"
 curl -s 'localhost:8080/api/v1/xp-events?limit=20' -H "Authorization: Bearer $TOKEN"
 
-# 開新 66 天
-curl -s -X POST localhost:8080/api/v1/program/restart -H "Authorization: Bearer $TOKEN"
+# 傳送門：列出六級門、開 E 級門、放棄進行中的門
+curl -s localhost:8080/api/v1/gates -H "Authorization: Bearer $TOKEN"
+curl -s -X POST localhost:8080/api/v1/gates -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"rank":"E"}'
+curl -s -X POST localhost:8080/api/v1/gates/active/abandon -H "Authorization: Bearer $TOKEN"
 
 # 獎勵總覽、圖鑑、開箱
 curl -s localhost:8080/api/v1/rewards -H "Authorization: Bearer $TOKEN"
@@ -137,4 +140,4 @@ curl -s -X PUT localhost:8080/api/v1/me/theme -H "Authorization: Bearer $TOKEN" 
 - 推播、好友、排名、專注計時器、AI 功能、原生 App、付費（規格明列第一階段不做）。
 - Refresh token／登出即失效。
 - 前端加離線暫存與 PWA。
-- 獎勵系統之後可能加：地下城、66 天 Boss、更多主題、稱號特效、以金幣兌換指定卡片。
+- 獎勵系統之後可能加：地下城、傳送門專屬任務與 Boss 關卡、更多主題、稱號特效、以金幣兌換指定卡片。

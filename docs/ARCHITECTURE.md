@@ -42,15 +42,16 @@ flowchart LR
 | --- | --- |
 | `Entities/User.cs` | 帳號：Email、PasswordHash、DisplayName、TimeZoneId（IANA） |
 | `Entities/Player.cs` | 遊戲化狀態（以 UserId 為主鍵）：Level、Xp、五維屬性、HardMode、Streak、BestStreak、TotalCompleted、LastSettledDate；獎勵相關 PeakLevel、Coins、ShieldCount、ThemeKey、TitlePrefixKey／TitleSuffixKey、PinnedCardId；`AddStat` 增減屬性且最低 0 |
-| `Entities/Program.cs` | 66 天週期：StartDate、Cycle、LengthDays（`DefaultLengthDays = 66`）、IsActive、CompletedAt（開新週期時週期已滿才寫入） |
+| `Entities/Gate.cs` | 傳送門：Rank、StartDate（第 1 天）、LengthDays／AllowedMisses（開門時寫入的快照）、Status（Active／Cleared／Failed／Abandoned）、EndedAt |
 | `Entities/Quest.cs` | 任務定義：StatType、Difficulty、QuestType、TargetValue、Step、Unit、SortOrder、IsArchived／ArchivedAt；漸進任務加 GoalId、ValueKind、StartValue、EndValue、StepValue、StageCount、DaysPerStep |
 | `Entities/Goal.cs` | 目標：Category、Answers（JSON）、LengthDays、StartDate、IsArchived／ArchivedAt、CompletedAt；`Quests` 導覽集合 |
 | `Entities/DailyLog.cs` | 某人某天的快照：CompletionRatio、IsCleared、BonusGranted、ClearCoinsGranted、Note、IsSettled／SettledAt、`Progresses` 導覽集合 |
 | `Entities/QuestProgress.cs` | 某天某任務的進度：Value、IsDone、XpGranted、StatGranted、TargetSnapshot |
 | `Entities/XpEvent.cs` | EXP 流水：Amount（可負）、Source、RefId、OccurredAt、Seq |
-| `Enums.cs` | `StatType`、`Difficulty`、`QuestType`、`XpSource`、`GoalCategory`、`ProgressionValueKind`；獎勵：`Rarity`、`ChestSource`、`CoinSource`、`RewardEventKind`、`TitleSlot`、`QuestRole`、`ShopItem` |
+| `Enums.cs` | `StatType`、`Difficulty`、`QuestType`、`XpSource`、`GoalCategory`、`ProgressionValueKind`；獎勵：`Rarity`、`ChestSource`、`CoinSource`、`RewardEventKind`、`TitleSlot`、`QuestRole`、`ShopItem`；傳送門：`GateRank`、`GateStatus`、`GateVerdict` |
 | `DefaultQuests.cs` | 基本任務的 9 個樣板 |
-| `Cards.cs`、`Achievements.cs` | 卡片目錄 `Cards.All`（25 張）；成就目錄 `Achievements.All`（12 個）與 `AchievementStats`（判定用統計快照） |
+| `Cards.cs`、`Achievements.cs` | 卡片目錄 `Cards.All`（25 張）；成就目錄 `Achievements.All`（17 個）與 `AchievementStats`（判定用統計快照） |
+| `Gates.cs` | 傳送門等級表 `Gates.All`（`GateDefinition`：天數、可漏天數、通關寶箱、首次通關成就鍵、需先通關的等級）、`Of`、`IsUnlocked` |
 | `Themes.cs`、`Shop.cs` | 主題鍵（預設 azure）；商店價格與保險卡上限 3 |
 | `Entities/RewardChest.cs` 等 | `RewardChest`、`OwnedCard`、`Achievement`、`OwnedTheme`、`CoinEvent`、`RewardEvent`；`Player` 加 PeakLevel、Coins、ShieldCount、ThemeKey、稱號字塊、PinnedCardId |
 | `DomainValidationException.cs` | 規則層輸入不合法，API 對應 400 |
@@ -65,6 +66,7 @@ flowchart LR
 | `Rules/Rewards.cs` | `Evaluate(RewardInput) → RewardOutcome`：純函式判定寶箱、晉階、成就、達標金幣、保險卡；升級以 `PeakLevel` 判定 |
 | `Rules/Loot.cs`、`Rules/Wallet.cs` | 開箱抽卡（亂數注入）；金幣異動的唯一入口，每次回傳 `CoinEvent` |
 | `Rules/QuestRoles.cs`、`Rules/GoalCompletion.cs`、`Rules/Titles.cs` | 任務角色與分類連續天數；目標完成判定；稱號組合 |
+| `Rules/GateRules.cs` | `LastDay`、`DayNumber`（夾在 1～天數）、`Judge(gate, today, misses, todayCleared)`：超過可漏天數失敗；最後一天已達標或已過最後一天則通關 |
 
 ### SoloLeveling.Infrastructure
 
@@ -73,7 +75,7 @@ flowchart LR
 | `AppDbContext.cs` | DbSet、主鍵／唯一鍵／索引、欄位長度與精度、enum 存字串、`DateTimeOffset` ↔ Unix 毫秒的全域 converter |
 | `SettlementService.cs` | `SettleAsync(userId, ct)`：`SELECT … FOR UPDATE` 鎖 Player 列、載入待結算區間的 DailyLog、呼叫 `Settlement.Settle`、存檔；呼叫端已有交易就沿用，沒有才自己開；把 `ShieldsUsed` 寫成未公告的 `RewardEvent` |
 | `PasswordHasher.cs` | PBKDF2-SHA256 的 `Hash`／`Verify` |
-| `Migrations/` | EF Core migration（`InitialCreate`、`AddGoalsAndProgression`、`AddRewards`） |
+| `Migrations/` | EF Core migration（`InitialCreate`、`AddGoalsAndProgression`、`AddRewards`、`AddRewardsEvaluatedDate`、`ReplaceProgramsWithGates`） |
 
 ### SoloLeveling.Api
 
@@ -87,21 +89,23 @@ flowchart LR
 | `Controllers/QuestsController.cs` | `GET/POST /quests`（加 `goalId`）、`PUT /quests/reorder`、`PUT/DELETE /quests/{id}`（漸進任務只允許改屬性） |
 | `Controllers/TodayController.cs` | `GET /today`（任務加 `progression`）、`PUT /today/quests/{id}/progress`、`PUT /today/note` |
 | `Controllers/HistoryController.cs` | `GET /history`、`GET /xp-events` |
-| `Controllers/ProgramController.cs` | `POST /program/restart` |
+| `Controllers/GatesController.cs` | `GET /gates`、`POST /gates`、`POST /gates/active/abandon` |
 | `Controllers/RewardsController.cs` | `GET /rewards`、`POST /rewards/chests/{id}/open`、`GET /cards`、`POST /shop/purchase` |
 | `Services/TodayContextLoader.cs` | `LoadAsync`：先結算，再載入 User、Player、今日 DailyLog（含 Progresses）、未封存任務、漸進任務的 `DoneDaysBeforeToday`，回傳 `TodayContext` |
-| `Services/AccountService.cs` | 註冊（建立 User、Player、第 1 週期；不再建任務）、登入、`ValidateTimeZone` |
+| `Services/AccountService.cs` | 註冊（建立 User、Player；不建任務與傳送門）、登入、`ValidateTimeZone` |
 | `Services/GoalService.cs` | 目標 CRUD；建立時驗證、產生任務、檢查重複；封存時連帶封存任務 |
-| `Services/PlayerService.cs` | `/me` 查詢與更新（加 `needsOnboarding` = 無未封存任務）；切換困難模式時呼叫 `ProgressUpdater.Recalculate` |
+| `Services/PlayerService.cs` | `/me` 查詢與更新（加 `needsOnboarding` = 無未封存任務、`activeGate` 在獎勵判定後查）；切換困難模式時呼叫 `ProgressUpdater.Recalculate` |
 | `Services/QuestService.cs` | 任務 CRUD 與排序；新增／修改／封存後重算今日達標；漸進任務禁止編輯目標欄位 |
 | `Services/TodayService.cs` | 今日查詢、進度寫入、反思筆記；`Build` 組 `TodayResponse`（漸進任務加 `progression` 物件） |
 | `Services/HistoryService.cs` | 每日紀錄（區間 ≤ 100 天）與 EXP 流水（limit 夾在 1–200） |
-| `Services/ProgramService.cs` | 開新 66 天週期 |
-| `Services/RewardApplier.cs` | `ApplyAsync(context, completedPrograms, ct)`：在第一次 SaveChanges 之後判定目標完成、查統計、`Rewards.Evaluate`、寫寶箱／成就／CoinEvent、回報保險卡事件，回傳 `RewardsDto`；`ApplyOnReadAsync(context, ct)` 供 `GET /today`、`GET /me`，本日已完整判定過、無新結算且無待公告保險卡事件時略過判定回空獎勵；`CompleteFinishedGoalsAsync` 供封存前先標記完成的目標 |
-| `Services/RewardStatsLoader.cs` | 成就統計的批次查詢（最多 7 次，不隨任務數增加） |
+| `Services/GateService.cs` | `GET /gates`（走 `ApplyOnReadAsync`）、開門、放棄；開門與放棄先 `GateTracker.ResolveAsync` 再檢查 409／404，結果傳給 `ApplyAsync(resolvedGate:)` |
+| `Services/GateTracker.cs` | `LoadActiveAsync`（進行中的門＋一次 COUNT 算已漏天數）、`ResolveAsync`（`GateRules.Judge`，有結果就寫狀態並存檔）、`LoadClearCountsAsync`（各等級通關次數） |
+| `Services/RewardApplier.cs` | `ApplyAsync(context, ct, alreadyCompletedGoals = 0, resolvedGate = null)`：在第一次 SaveChanges 之後判定目標完成、判定傳送門（`GateTracker.ResolveAsync`）、查統計、`Rewards.Evaluate`、寫寶箱／成就／CoinEvent、回報保險卡事件，回傳含 `gateCleared`／`gateFailed` 的 `RewardsDto`；`ApplyOnReadAsync(context, ct)` 供 `GET /today`、`GET /me`、`GET /gates`，本日已完整判定過、無新結算且無待公告保險卡事件時略過判定回空獎勵；`CompleteFinishedGoalsAsync` 供封存前先標記完成的目標 |
+| `Services/RewardStatsLoader.cs` | 成就統計的批次查詢（最多 7 次，不隨任務數增加；傳送門通關次數經 `GateTracker`） |
 | `Services/RewardService.cs` | 獎勵總覽、開箱、圖鑑、商店 |
 | `Services/SettlementScheduler.cs` | `BackgroundService`，啟動時跑一次、之後每小時 `RunOnceAsync` |
 | `Contracts/GoalDtos.cs` | Goal 與 progression 相關的 DTO |
+| `Contracts/GateDtos.cs` | `ActiveGateDto`、`GateTierDto`、`GatesResponse`、`OpenGateRequest` |
 | `Contracts/RewardDtos.cs` | 獎勵相關 DTO；`RewardsDto` 以選填 `Rewards` 參數掛在既有回應上（null 時 JSON 省略）；沒有其他內容的封存回應用 `RewardsEnvelope` |
 | `Contracts/Dtos.cs`、`Contracts/TodayDtos.cs` | 請求／回應 record |
 | `Contracts/Mappers.cs` | 實體轉 DTO（`ToDto`）、`ToUnixSeconds`（唯一的秒換算處）、`EffectiveTarget` 計算與名稱渲染 |
@@ -130,7 +134,7 @@ flowchart LR
    - 依完成狀態變化發放或撤銷 EXP、屬性、TotalCompleted，產生 `Quest`／`QuestUndo` 事件。
    - `Recalculate` 重算達標率與 IsCleared，必要時產生 `DailyBonus`／`DailyBonusUndo` 事件，並更新 BestStreak。
 7. **持久化**：把新進度明確 `db.QuestProgresses.AddRange`（避免被當成 Modified），事件 `db.XpEvents.AddRange`，`SaveChangesAsync`。
-8. **套用獎勵**：`RewardApplier.ApplyAsync`（仍在交易內）：判定目標完成並寫 `CompletedAt` → `RewardStatsLoader` 批次查統計（此時看得到剛存的進度）→ `Rewards.Evaluate`（請求前快照 `TodayContext.Before` 只用來算 `levelsGained`）→ 寫寶箱、成就、`CoinEvent`（經 `Wallet`）、更新 `PeakLevel`／`ShieldCount`／`ClearCoinsGranted` → 未公告的保險卡事件標成已公告 → `SaveChangesAsync`。回傳的 `RewardsDto` 放進回應的 `rewards`。
+8. **套用獎勵**：`RewardApplier.ApplyAsync`（仍在交易內）：判定目標完成並寫 `CompletedAt` → 判定傳送門（`GateTracker.ResolveAsync`，呼叫端已判定時沿用 `resolvedGate`）→ `RewardStatsLoader` 批次查統計（此時看得到剛存的進度）→ `Rewards.Evaluate`（請求前快照 `TodayContext.Before` 只用來算 `levelsGained`）→ 寫寶箱、成就、`CoinEvent`（經 `Wallet`）、更新 `PeakLevel`／`ShieldCount`／`ClearCoinsGranted` → 未公告的保險卡事件標成已公告 → `SaveChangesAsync`。回傳的 `RewardsDto` 放進回應的 `rewards`。
 9. **Commit**：`tx.CommitAsync`，釋放 Player 列鎖。
 10. **組回應**：`Build(context)` 依未封存任務產生 `TodayQuestDto`（含 value、isDone、xpReward、statReward），加上今日的 completionRatio、isCleared、threshold、bonusGranted、note 與 `rewards`。
 
@@ -140,7 +144,7 @@ flowchart LR
 
 **觸發時機**
 
-- 所有需要「今日」的端點：`GET/PATCH /me`、`PUT /me/*`、`POST/PUT/DELETE /quests`、`GET /today` 系列、`GET /history`、`POST /program/restart`、`GET /rewards`、`POST /rewards/chests/{id}/open`、`POST /shop/purchase`，都經 `TodayContextLoader.LoadAsync` 先結算。
+- 所有需要「今日」的端點：`GET/PATCH /me`、`PUT /me/*`、`POST/PUT/DELETE /quests`、`GET /today` 系列、`GET /history`、`GET/POST /gates`、`POST /gates/active/abandon`、`GET /rewards`、`POST /rewards/chests/{id}/open`、`POST /shop/purchase`，都經 `TodayContextLoader.LoadAsync` 先結算。
 - 不結算的端點：`GET /quests`、`PUT /quests/reorder`、`GET /xp-events`、`GET /cards`、auth。
 - `SettlementScheduler`：啟動時跑一次、之後每小時一次；撈出所有使用者後在記憶體篩選 `LastSettledDate is null || LastSettledDate < 各自今日 - 1`，每人用獨立 scope 與交易呼叫 `SettleAsync`。單人失敗（`DbUpdateException`、`NpgsqlException`、`TimeoutException`）只記 log，不影響其他人。
 
@@ -167,7 +171,7 @@ flowchart LR
 | --- | --- | --- |
 | `Users` | 帳號 | `Email` 為 `citext`，unique（大小寫不敏感）；`DisplayName` ≤ 40、`TimeZoneId` ≤ 64 |
 | `Players` | 玩家狀態，與 User 一對一 | PK = FK `UserId` |
-| `Programs` | 66 天週期 | partial unique index `UserId WHERE "IsActive" = true`（每人一筆進行中） |
+| `Gates` | 傳送門 | `Rank`、`Status` 存字串；partial unique index `UserId WHERE "Status" = 'Active'`（每人一道進行中）；index `(UserId, Status)` |
 | `Goals` | 漸進目標 | `Category` 存字串；`Answers` 為 jsonb；index `(UserId, IsArchived)`；partial unique index `(UserId, Category) WHERE "IsArchived" = false` |
 | `Quests` | 任務定義 | index `(UserId, IsArchived)`；`Name` ≤ 60、`Unit` ≤ 10；`TargetValue`、`Step` 為 `numeric(10,2)`；漸進任務有 `GoalId`、`ValueKind`、`StartValue`、`EndValue`、`StepValue`、`StageCount`、`DaysPerStep`；階段不存 DB，由 `TodayContext.DoneDaysBeforeToday` 計算 |
 | `DailyLogs` | 每日快照 | unique `(UserId, Date)`；`CompletionRatio` 為 `numeric(5,4)` |
@@ -180,9 +184,9 @@ flowchart LR
 | `CoinEvents` | 金幣流水 | index `(UserId, OccurredAt)`；`Seq` identity |
 | `RewardEvents` | 保險卡生效等需通知的事件 | index `(UserId, AnnouncedAt)` |
 
-- **enum**：`Quest.StatType／Difficulty／QuestType`、`XpEvent.Source`、`RewardChest.Rarity／Source`、`CoinEvent.Source`、`RewardEvent.Kind` 存字串。
-- **時間戳**（`CreatedAt`、`ArchivedAt`、`SettledAt`、`OccurredAt`、`CompletedAt`、`OpenedAt`、`AnnouncedAt`、`UnlockedAt`、`FirstAcquiredAt`）：`bigint` Unix 毫秒，由 `AppDbContext.ConfigureConventions` 對所有 `DateTimeOffset`／`DateTimeOffset?` 屬性套用 converter；Domain 端一律是 `DateTimeOffset`。
-- **日期**（`Program.StartDate`、`DailyLog.Date`、`Player.LastSettledDate`）：`date`，代表使用者時區下的日期。
+- **enum**：`Quest.StatType／Difficulty／QuestType`、`XpEvent.Source`、`RewardChest.Rarity／Source`、`CoinEvent.Source`、`RewardEvent.Kind`、`Gate.Rank／Status` 存字串。
+- **時間戳**（`CreatedAt`、`ArchivedAt`、`SettledAt`、`OccurredAt`、`CompletedAt`、`OpenedAt`、`AnnouncedAt`、`UnlockedAt`、`FirstAcquiredAt`、`EndedAt`）：`bigint` Unix 毫秒，由 `AppDbContext.ConfigureConventions` 對所有 `DateTimeOffset`／`DateTimeOffset?` 屬性套用 converter；Domain 端一律是 `DateTimeOffset`。
+- **日期**（`Gate.StartDate`、`DailyLog.Date`、`Player.LastSettledDate`）：`date`，代表使用者時區下的日期。
 - **XpEvent 排序**：`GET /xp-events` 依 `OccurredAt DESC, Seq DESC`。同一請求內的事件 `OccurredAt` 相同，`Seq` 只保證穩定排序。
 - **擴充**：`citext` 由 migration 建立（`HasPostgresExtension("citext")`）。
 
