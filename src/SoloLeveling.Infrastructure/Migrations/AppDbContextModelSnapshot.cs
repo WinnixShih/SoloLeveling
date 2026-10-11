@@ -121,6 +121,51 @@ namespace SoloLeveling.Infrastructure.Migrations
                     b.ToTable("DailyLogs");
                 });
 
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.Gate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AllowedMisses")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("EndedAt")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("LengthDays")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Rank")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'Active'");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("Gates");
+                });
+
             modelBuilder.Entity("SoloLeveling.Domain.Entities.Goal", b =>
                 {
                     b.Property<Guid>("Id")
@@ -278,42 +323,6 @@ namespace SoloLeveling.Infrastructure.Migrations
                     b.HasKey("UserId");
 
                     b.ToTable("Players");
-                });
-
-            modelBuilder.Entity("SoloLeveling.Domain.Entities.Program", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<long?>("CompletedAt")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("Cycle")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("LengthDays")
-                        .HasColumnType("integer");
-
-                    b.Property<DateOnly>("StartDate")
-                        .HasColumnType("date");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId")
-                        .IsUnique()
-                        .HasFilter("\"IsActive\" = true");
-
-                    b.ToTable("Programs");
                 });
 
             modelBuilder.Entity("SoloLeveling.Domain.Entities.Quest", b =>
@@ -612,6 +621,15 @@ namespace SoloLeveling.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SoloLeveling.Domain.Entities.Gate", b =>
+                {
+                    b.HasOne("SoloLeveling.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SoloLeveling.Domain.Entities.Goal", b =>
                 {
                     b.HasOne("SoloLeveling.Domain.Entities.User", null)
@@ -644,15 +662,6 @@ namespace SoloLeveling.Infrastructure.Migrations
                     b.HasOne("SoloLeveling.Domain.Entities.User", null)
                         .WithOne()
                         .HasForeignKey("SoloLeveling.Domain.Entities.Player", "UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("SoloLeveling.Domain.Entities.Program", b =>
-                {
-                    b.HasOne("SoloLeveling.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

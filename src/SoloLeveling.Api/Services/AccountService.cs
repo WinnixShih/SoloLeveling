@@ -5,9 +5,7 @@ using SoloLeveling.Api.Contracts;
 using SoloLeveling.Api.Errors;
 using SoloLeveling.Domain;
 using SoloLeveling.Domain.Entities;
-using SoloLeveling.Domain.Rules;
 using SoloLeveling.Infrastructure;
-using ProgramEntity = SoloLeveling.Domain.Entities.Program;
 
 namespace SoloLeveling.Api.Services;
 
@@ -23,7 +21,7 @@ public class AccountService(AppDbContext db, TimeProvider clock, JwtTokenService
     public const int MinPasswordLength = 8;
 
     /// <summary>
-    /// 註冊：建立 User、Player 與第 1 個 66 天週期；任務由引導流程（POST /goals）建立。
+    /// 註冊：建立 User 與 Player；任務由引導流程（POST /goals）建立，傳送門由玩家自行開啟。
     /// </summary>
     /// <param name="request">註冊請求。</param>
     /// <param name="ct">取消權杖。</param>
@@ -56,7 +54,6 @@ public class AccountService(AppDbContext db, TimeProvider clock, JwtTokenService
         }
 
         var now = clock.GetUtcNow();
-        var today = UserClock.DateOf(now, timeZoneId);
         var user = new User
         {
             Id = Guid.NewGuid(),
@@ -68,7 +65,6 @@ public class AccountService(AppDbContext db, TimeProvider clock, JwtTokenService
         };
         db.Users.Add(user);
         db.Players.Add(new Player { UserId = user.Id, CreatedAt = now });
-        db.Programs.Add(new ProgramEntity { Id = Guid.NewGuid(), UserId = user.Id, StartDate = today, Cycle = 1, IsActive = true, CreatedAt = now });
         try
         {
             await db.SaveChangesAsync(ct);

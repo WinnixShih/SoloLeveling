@@ -128,7 +128,7 @@ public class RewardService(
         }
 
         await db.SaveChangesAsync(ct);
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
+        var rewards = await rewardApplier.ApplyAsync(context, ct);
         await tx.CommitAsync(ct);
         return new OpenChestResponse(Cards.Find(loot.CardId)!.ToDto(), loot.IsDuplicate, loot.Coins, context.Player.Coins, rewards);
     }
@@ -189,7 +189,7 @@ public class RewardService(
         }
 
         await db.SaveChangesAsync(ct);
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
+        var rewards = await rewardApplier.ApplyAsync(context, ct);
         var themes = await OwnedThemesAsync(userId, ct);
         await tx.CommitAsync(ct);
         return new PurchaseResponse(player.Coins, player.ShieldCount, themes, chestDto, rewards);

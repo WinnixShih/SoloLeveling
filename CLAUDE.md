@@ -1,6 +1,6 @@
 # SoloLeveling 專案指引
 
-.NET 10 習慣養成 App 的 MVP：每天完成自訂任務累積 EXP、升級、養五維屬性，配合 66 天計畫與連續達標紀錄；後端 API＋由 API 靜態提供的純 HTML＋JS 前端。
+.NET 10 習慣養成 App 的 MVP：每天完成自訂任務累積 EXP、升級、養五維屬性，配合傳送門挑戰與連續達標紀錄；後端 API＋由 API 靜態提供的純 HTML＋JS 前端。
 
 - 產品規格（領域規則、API、結算演算法、驗收清單）：[docs/SPEC.md](docs/SPEC.md)
 - 啟動方式、環境變數、curl 範例、實作上的決定、後續待辦：[README.md](README.md)
@@ -38,8 +38,9 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 
 - **Player.Xp 的任何變動都必須對應一筆 XpEvent。** Domain 規則方法（`ProgressUpdater`、`Settlement`、`Leveling`）只改記憶體中的實體並回傳事件，由 Api 服務層 `db.XpEvents.AddRange(...)` 持久化。直接呼叫 `Leveling.GainXp／LoseXp／ApplyPenalty` 時要自己補事件。
 - **Player.Coins 的任何變動都必須對應一筆 CoinEvent，一律經 `Wallet.Change`／`Wallet.Spend`。** 不要直接改 `Player.Coins`（測試種資料除外）。
-- **會改玩家狀態的端點在第一次 `SaveChangesAsync` 之後呼叫一次 `RewardApplier.ApplyAsync`，再 commit。** 它會查統計（要看得到本次修改）、寫寶箱／成就／金幣事件、回報保險卡事件並再存一次；回傳的 `RewardsDto` 放進回應的 `Rewards`。`GET /today`、`GET /me` 改呼叫 `ApplyOnReadAsync`（結算可能消耗保險卡）：本次結算新結算了日子、有待公告保險卡事件、或 `Player.RewardsEvaluatedDate` 不是今天時等同 `ApplyAsync`（因此每天至少完整判定一次），其餘略過統計與判定、回空獎勵；要封存目標／任務的端點須在封存前呼叫 `CompleteFinishedGoalsAsync` 並把結果傳給 `ApplyAsync` 的 `alreadyCompletedGoals`，否則走完期間當天封存會丟掉 A 箱；只讀的 `GET /rewards`（只結算）、`/cards`、`/goals`、`/history` 不呼叫，否則會吃掉待公告的保險卡事件。
+- **會改玩家狀態的端點在第一次 `SaveChangesAsync` 之後呼叫一次 `RewardApplier.ApplyAsync`，再 commit。** 它會查統計（要看得到本次修改）、寫寶箱／成就／金幣事件、回報保險卡事件並再存一次；回傳的 `RewardsDto` 放進回應的 `Rewards`。`GET /today`、`GET /me`、`GET /gates` 改呼叫 `ApplyOnReadAsync`（結算可能消耗保險卡）：本次結算新結算了日子、有待公告保險卡事件、或 `Player.RewardsEvaluatedDate` 不是今天時等同 `ApplyAsync`（因此每天至少完整判定一次），其餘略過統計與判定、回空獎勵；要封存目標／任務的端點須在封存前呼叫 `CompleteFinishedGoalsAsync` 並把結果傳給 `ApplyAsync` 的 `alreadyCompletedGoals`，否則走完期間當天封存會丟掉 A 箱；只讀的 `GET /rewards`（只結算）、`/cards`、`/goals`、`/history` 不呼叫，否則會吃掉待公告的保險卡事件。
 - **升級寶箱與晉階獎勵以 `Player.PeakLevel` 判定**，成就以「條件成立且未解鎖」判定；不要改成請求前後差，否則撤銷再完成可以刷寶箱。
+- **傳送門判定只在 `RewardApplier`（經 `GateTracker.ResolveAsync`）。** 已漏天數不存欄位，由 `GateTracker.LoadActiveAsync` 以「門期間內已結算的天數（到 `Player.LastSettledDate` 為止）− 一次 COUNT 已結算且達標的 DailyLog」算出；保險卡保住的日子、以及長期未登入超過結算補跑上限而沒有紀錄的日子都算漏；通關／失敗寫入後不再判定。開門與放棄要先 `ResolveAsync` 再檢查 409／404，並把結果傳給 `ApplyAsync` 的 `resolvedGate`，否則剛在結算後結束的門會擋住開門，或同一請求判定兩次。
 - **所有需要「今日」的端點都要先結算。** 服務層先 `db.Database.BeginTransactionAsync` → `TodayContextLoader.LoadAsync`（內部呼叫 `SettlementService.SettleAsync`，沿用呼叫端交易，以 `SELECT … FOR UPDATE` 鎖 Player 列）→ 修改 → `SaveChangesAsync` → `CommitAsync`。不需要今日的查詢（`QuestService.ListAsync`、`ReorderAsync`、`HistoryService.GetXpEventsAsync`）不結算。
 - **「今日」只能用 `UserClock.DateOf(now, user.TimeZoneId)` 決定。** 時間來源一律注入 `TimeProvider`（`clock.GetUtcNow()`），禁止直接用 `DateTime.Now`／`DateTime.UtcNow`。
 - **時間戳單位：** DB 是 `bigint` Unix 毫秒（`AppDbContext.ConfigureConventions` 的 value converter，全域套在 `DateTimeOffset`），API 出口是 Unix 秒（`Contracts/Mappers.ToUnixSeconds`）；只有這兩處可以換算。`DateOnly` 日期欄位（`StartDate`、`Date`、`LastSettledDate`）是 `date` 型別，API 用 `YYYY-MM-DD`。
@@ -56,10 +57,10 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 - **導覽集合加入的新實體會被當成 Modified。** 透過 `log.Progresses.Add(...)` 加入且主鍵已設值的實體，EF 會當成既有資料，`SaveChanges` 丟 `DbUpdateConcurrencyException`。要明確 `db.QuestProgresses.AddRange(...)`（見 `TodayService.SetProgressAsync`：先記下既有 Id，再把新增的標成 Added）。
 - **JWT 有效期驗證用注入的 `TimeProvider`。** `Program.cs` 以 `LifetimeValidator` 取代 IdentityModel 預設的系統時鐘，否則測試用 `FakeTimeProvider` 簽發的權杖會隨真實時間過期而 401；不要拿掉。
 - **同一請求內多筆 XpEvent 的 `OccurredAt` 相同**，`Seq`（DB identity）只保證排序穩定，不保證等於程式內建立順序；測試不要驗同一時間點內的先後。
-- **Programs 有 partial unique index（每人只能一筆 `IsActive = true`）。** 換週期要先把舊的設 false 並 `SaveChangesAsync`，再新增新的（見 `ProgramService.RestartAsync`）。
+- **Gates 有 partial unique index（每人只能一筆 `Status = 'Active'`）。** 要開新門前，舊門必須已改成終局狀態並 `SaveChangesAsync`（`GateTracker.ResolveAsync` 有結果時會自己存檔，見 `GateService.OpenAsync`）。
 - **呼叫 `TodayContextLoader.LoadAsync` 前一定要先開交易。** 沒開的話 `SettlementService` 會自己開交易並 commit，Player 列鎖在載入今日、套規則之前就釋放，後續修改不再受鎖保護。
 - **`SettlementResult.TodayLog` 與 `TodayContext` 裡的實體都已被 DbContext 追蹤**，直接改屬性再 `SaveChangesAsync` 即可，不要再 `Attach`／`Update`。
-- **實體 `Program` 與 Api 的進入點 `Program` 同名。** Api 內參照實體時用別名 `using ProgramEntity = SoloLeveling.Domain.Entities.Program;`。
+- **`Gates` 同名**：`SoloLeveling.Domain.Gates` 是傳送門等級表（static），`AppDbContext.Gates` 是 DbSet（實體 `Gate`）。
 - **`Settlement.Settle` 會消耗保險卡**（未達標、Streak > 0、ShieldCount > 0），`SettlementService` 把 `ShieldsUsed` 寫成未公告的 `RewardEvent`；排程結算也會走到這裡。
 - **`Achievements` 同名**：`SoloLeveling.Domain.Achievements` 是成就目錄（static），`AppDbContext.Achievements` 是已解鎖成就的 DbSet（實體 `Achievement`）。
 - **建置很嚴格：** `Directory.Build.props` 開了 `TreatWarningsAsErrors`、`EnforceCodeStyleInBuild`，src 專案 `GenerateDocumentationFile`（public 成員缺 XML 註解就建置失敗）；`.editorconfig` 對 `Migrations/` 關閉 analyzer；換行一律 LF（`.gitattributes` 的 `eol=lf`＋`.editorconfig`）。
@@ -85,6 +86,6 @@ tests/SoloLeveling.Api.Tests      Testcontainers 整合測試（結算、排程�
 
 ## 目前狀態
 
-- MVP、引導式目標、系統介面改版、獎勵系統完成，測試全綠（340 個：Domain 244 + Api 96）。
+- MVP、引導式目標、系統介面改版、獎勵系統、傳送門挑戰完成，測試全綠（395 個：Domain 282 + Api 113）。
 - GitHub 遠端 `origin` 是 `git@github.com:WinnixShih/SoloLeveling.git`，`main` 已 push 並追蹤 `origin/main`。
 - 待辦見 README「後續」：refresh token／登出即失效、前端離線暫存與 PWA 等。

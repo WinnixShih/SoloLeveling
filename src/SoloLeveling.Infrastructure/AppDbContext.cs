@@ -15,8 +15,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     /// <summary>玩家狀態。</summary>
     public DbSet<Player> Players => Set<Player>();
 
-    /// <summary>66 天計畫週期。</summary>
-    public DbSet<Program> Programs => Set<Program>();
+    /// <summary>傳送門挑戰。</summary>
+    public DbSet<Gate> Gates => Set<Gate>();
 
     /// <summary>任務。</summary>
     public DbSet<Quest> Quests => Set<Quest>();
@@ -79,12 +79,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             b.Property(x => x.PinnedCardId).HasMaxLength(64);
         });
 
-        modelBuilder.Entity<Program>(b =>
+        modelBuilder.Entity<Gate>(b =>
         {
             b.HasKey(x => x.Id);
             b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId);
-            // 每位使用者同時只有一筆進行中的週期
-            b.HasIndex(x => x.UserId).IsUnique().HasFilter("\"IsActive\" = true");
+            b.Property(x => x.Rank).HasConversion<string>().HasMaxLength(16);
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
+            // 每位使用者同時只有一道進行中的門
+            b.HasIndex(x => x.UserId).IsUnique().HasFilter("\"Status\" = 'Active'");
+            // 解鎖判斷要查各等級通關次數
+            b.HasIndex(x => new { x.UserId, x.Status });
         });
 
         modelBuilder.Entity<Quest>(b =>

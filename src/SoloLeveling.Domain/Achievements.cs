@@ -9,7 +9,7 @@ namespace SoloLeveling.Domain;
 /// <param name="RoleStreaks">各角色任務的連續達標天數（只算未封存的角色任務）。</param>
 /// <param name="RoleMinutes">各角色任務的累計分鐘（只有運動、閱讀；含已封存任務）。</param>
 /// <param name="OwnedCardKinds">圖鑑擁有的卡片種數。</param>
-/// <param name="CompletedPrograms">已完成的 66 天週期數。</param>
+/// <param name="GateClears">各等級傳送門的通關次數；沒有通關的等級不在字典內。</param>
 /// <param name="PeakLevel">曾到達的最高等級。</param>
 public sealed record AchievementStats(
     int GoalCount,
@@ -18,11 +18,11 @@ public sealed record AchievementStats(
     IReadOnlyDictionary<QuestRole, int> RoleStreaks,
     IReadOnlyDictionary<QuestRole, int> RoleMinutes,
     int OwnedCardKinds,
-    int CompletedPrograms,
+    IReadOnlyDictionary<GateRank, int> GateClears,
     int PeakLevel)
 {
     /// <summary>全部為 0、等級 1 的統計（新玩家）。</summary>
-    public static AchievementStats Empty { get; } = new(0, 0, 0, new Dictionary<QuestRole, int>(), new Dictionary<QuestRole, int>(), 0, 0, 1);
+    public static AchievementStats Empty { get; } = new(0, 0, 0, new Dictionary<QuestRole, int>(), new Dictionary<QuestRole, int>(), 0, new Dictionary<GateRank, int>(), 1);
 
     /// <summary>
     /// 某角色的連續達標天數。
@@ -42,6 +42,16 @@ public sealed record AchievementStats(
     public int MinutesOf(QuestRole role)
     {
         return RoleMinutes.TryGetValue(role, out var minutes) ? minutes : 0;
+    }
+
+    /// <summary>
+    /// 某等級傳送門的通關次數。
+    /// </summary>
+    /// <param name="rank">等級。</param>
+    /// <returns>次數；沒有通關為 0。</returns>
+    public int GateClearsOf(GateRank rank)
+    {
+        return GateClears.TryGetValue(rank, out var count) ? count : 0;
     }
 }
 
@@ -92,7 +102,7 @@ public static class Achievements
     /// <summary>到達 S 階的等級，須與 <c>Leveling.RankOf</c> 的分界一致。</summary>
     public const int SRankLevel = 45;
 
-    /// <summary>第一批 12 個成就。</summary>
+    /// <summary>全部 17 個成就；傳送門的 6 個以「該等級通關次數 ≥ 1」判定，鍵與 <see cref="Gates"/> 的 <c>AchievementKey</c> 一致。</summary>
     public static IReadOnlyList<AchievementDefinition> All { get; } =
     [
         new("first-goal", "初次覺醒", "建立第一個目標", "覺醒的", TitleSlot.Prefix, 1, s => s.GoalCount),
@@ -104,7 +114,12 @@ public static class Achievements
         new("screen-30", "手機克星", "螢幕時間任務連續達標 30 天", "手機克星", TitleSlot.Suffix, 30, s => s.StreakOf(QuestRole.ScreenTime)),
         new("exercise-1000", "百里", "運動任務累計 1000 分鐘", "百里行者", TitleSlot.Suffix, 1000, s => s.MinutesOf(QuestRole.Exercise)),
         new("reading-1000", "藏書", "閱讀任務累計 1000 分鐘", "藏書者", TitleSlot.Suffix, 1000, s => s.MinutesOf(QuestRole.Reading)),
-        new("program-complete", "破繭", "完成一個 66 天週期", "破繭的", TitleSlot.Prefix, 1, s => s.CompletedPrograms),
+        new("gate-e", "破繭", "通關第一道傳送門", "破繭的", TitleSlot.Prefix, 1, s => s.GateClearsOf(GateRank.E)),
+        new("gate-d", "D 級獵人", "首次通關 D 級傳送門", "D 級獵人", TitleSlot.Suffix, 1, s => s.GateClearsOf(GateRank.D)),
+        new("gate-c", "C 級獵人", "首次通關 C 級傳送門", "C 級獵人", TitleSlot.Suffix, 1, s => s.GateClearsOf(GateRank.C)),
+        new("gate-b", "B 級獵人", "首次通關 B 級傳送門", "B 級獵人", TitleSlot.Suffix, 1, s => s.GateClearsOf(GateRank.B)),
+        new("gate-a", "A 級獵人", "首次通關 A 級傳送門", "A 級獵人", TitleSlot.Suffix, 1, s => s.GateClearsOf(GateRank.A)),
+        new("gate-s", "S 級獵人", "首次通關 S 級傳送門", "S 級獵人", TitleSlot.Suffix, 1, s => s.GateClearsOf(GateRank.S)),
         new("collector-10", "收藏家", "圖鑑擁有 10 種卡片", "收藏家", TitleSlot.Suffix, 10, s => s.OwnedCardKinds),
         new("rank-s", "傳說", "到達 S 階", "傳說的", TitleSlot.Prefix, SRankLevel, s => s.PeakLevel),
     ];

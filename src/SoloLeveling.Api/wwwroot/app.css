@@ -326,11 +326,14 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; accent-
   right: calc(var(--gutter) + var(--safe-right));
   max-width: 480px;
   margin: 0 auto;
+  display: grid;
+  gap: 8px;
   pointer-events: none;
 }
 .sysmsg {
   display: grid;
   gap: 2px;
+  min-width: 0;
   padding: 12px 14px;
   background: var(--panel-solid);
   border: 1px solid var(--accent);
@@ -505,6 +508,13 @@ input.limit-input { width: 76px; text-align: right; }
   100% { box-shadow: 0 0 0 transparent; }
 }
 .cal-readout { min-height: 1.5em; margin-top: 10px; color: var(--ink); font: 12px var(--mono); }
+.gate-head { flex-wrap: wrap; align-items: baseline; }
+.gate-tier { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px dashed var(--line-soft); }
+.gate-tier:first-of-type { border-top: 0; }
+.gate-main { flex: 1 1 180px; min-width: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.gate-main b { color: var(--ink); font-family: var(--serif); letter-spacing: .08em; }
+.gate-tier.locked .gate-main { opacity: .55; }
+.gate-lock { display: inline-grid; place-items: center; min-height: var(--tap); padding: 0 10px; color: var(--muted); font: 600 11px var(--latin); letter-spacing: .2em; }
 .stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; text-align: center; }
 .stat { display: grid; gap: 2px; padding: 8px 2px; border: 1px solid var(--line-soft); }
 .stat b { color: var(--ink); font-size: 20px; font-weight: 600; }

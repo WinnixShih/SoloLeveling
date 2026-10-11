@@ -56,7 +56,7 @@ public class TodayService(AppDbContext db, TodayContextLoader loader, RewardAppl
         db.QuestProgresses.AddRange(context.TodayLog.Progresses.Where(p => !existingProgressIds.Contains(p.Id)));
         db.XpEvents.AddRange(events);
         await db.SaveChangesAsync(ct);
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
+        var rewards = await rewardApplier.ApplyAsync(context, ct);
         await tx.CommitAsync(ct);
         return Build(context) with { Rewards = rewards };
     }

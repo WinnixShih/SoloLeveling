@@ -135,7 +135,7 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, RewardAppli
 
         db.XpEvents.AddRange(ProgressUpdater.Recalculate(context.Player, context.TodayLog, context.ActiveQuests, now));
         await db.SaveChangesAsync(ct);
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct);
+        var rewards = await rewardApplier.ApplyAsync(context, ct);
         var response = await BuildListAsync(userId, context, ct);
         await tx.CommitAsync(ct);
         return response with { Rewards = rewards };
@@ -184,7 +184,7 @@ public class GoalService(AppDbContext db, TodayContextLoader loader, RewardAppli
 
         db.XpEvents.AddRange(ProgressUpdater.Recalculate(context.Player, context.TodayLog, context.ActiveQuests, now));
         await db.SaveChangesAsync(ct);
-        var rewards = await rewardApplier.ApplyAsync(context, 0, ct, completedGoals);
+        var rewards = await rewardApplier.ApplyAsync(context, ct, completedGoals);
         await tx.CommitAsync(ct);
         return rewards;
     }

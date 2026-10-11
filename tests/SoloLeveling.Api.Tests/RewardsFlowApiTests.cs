@@ -289,32 +289,7 @@ public sealed class RewardsFlowApiTests(PostgresFixture fixture) : IDisposable
         (await db.Goals.SingleAsync(g => g.Id == goalId)).CompletedAt.Should().BeNull();
     }
 
-    [Fact]
-    public async Task 開新週期_舊週期滿66天_發S箱並解鎖破繭()
-    {
-        var client = await _factory.RegisterAsync();
-        await _factory.AdvanceAsync(client, TimeSpan.FromDays(66));
 
-        var response = await client.PostAsync("/api/v1/program/restart", null);
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        body.GetProperty("cycle").GetInt32().Should().Be(2);
-        Chests(body).Should().Contain("S:ProgramCompleted");
-        AchievementKeys(body).Should().Contain("program-complete");
-    }
-
-    [Fact]
-    public async Task 開新週期_舊週期未滿66天_不發S箱()
-    {
-        var client = await _factory.RegisterAsync();
-        await _factory.AdvanceAsync(client, TimeSpan.FromDays(65));
-
-        var body = await (await client.PostAsync("/api/v1/program/restart", null)).Content.ReadFromJsonAsync<JsonElement>();
-
-        Chests(body).Should().NotContain("S:ProgramCompleted");
-        AchievementKeys(body).Should().NotContain("program-complete");
-    }
 
     [Fact]
     public async Task 螢幕時間任務連續30天_第30天解鎖手機克星()
